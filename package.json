@@ -4,7 +4,8 @@
   "description": "Perform macaroon aware network requests",
   "main": "index.js",
   "scripts": {
-    "test": "tap --cov test.js"
+    "test": "tap --cov test.js",
+    "lint": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "atob": "^2.1.1",
     "btoa": "^1.2.1",
+    "eslint": "^5.0.1",
     "rewire": "^4.0.1",
     "sinon": "^6.0.1",
     "tap": "^12.0.1"
