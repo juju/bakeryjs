@@ -1,0 +1,22 @@
+{
+  "name": "macaroon-bakery",
+  "version": "0.1.0",
+  "description": "Perform macaroon aware network requests",
+  "main": "index.js",
+  "scripts": {
+    "test": "tap --cov test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juju/bakeryjs.git"
+  },
+  "author": "Jeff Pihach <jeff.pihach@canonical.com> (https://fromanegg.com)",
+  "license": "LGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/juju/bakeryjs/issues"
+  },
+  "homepage": "https://github.com/juju/bakeryjs#readme",
+  "dependencies": {
+    "macaroon": "^3.0.1"
+  }
+}
