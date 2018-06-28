@@ -8,7 +8,7 @@ const tap = require('tap');
 const rewire = require('rewire');
 const sinon = require('sinon');
 
-const bakery = rewire('./bakery');
+const bakery = rewire('./index');
 
 let TextEncoder;
 if (typeof window === 'undefined') {
