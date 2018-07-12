@@ -452,7 +452,7 @@ const BakeryStorage = class BakeryStorage {
         macaroons to the charm store service. The function accepts a value
         and a callback, which receives an error and a response.
   */
-  constructor(store, params) {
+  constructor(store, params={}) {
     this._store = store;
     this._services = params.services || {};
     this._charmstoreCookieSetter = params.charmstoreCookieSetter || null;
