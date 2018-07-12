@@ -54,20 +54,17 @@ const deserialize = serialized => {
 const Bakery = class Bakery {
 
   /**
-    Initialize a bakery with the given HTTP client (used to make requests)
-    and storage (used to persist macaroons).
+    Initialize a macaroon bakery with the given parameters.
 
-    @param {Object} httpClient The client used to send HTTP requests. It must
-      implement a "send{Method}Request" method for every HTTP method. An
-      instance of WebHandler is usually provided.
-    @param {Object} storage The storage used to persist macaroons. It must
-      implement the following interface:
-        - get(key) -> value;
-        - set(key, value, callback): the callback is called without arguments
-          when the set operation has been performed.
     @param {Object} params Optional parameters including:
       - onSuccess: a function to be called when the request completes
         properly. It defaults to a no-op function.
+      - storage: the storage used to persist macaroons. It must implement the
+        following interface:
+        - get(key) -> value;
+        - set(key, value, callback): the callback is called without arguments
+          when the set operation has been performed.
+        If not provided, it defaults to BakeryStorage using an in memory store.
       - visitPage: the function used to visit the identity provider page when
         required, defaulting to opening a pop up window. It receives an
         error object containing:
@@ -76,34 +73,20 @@ const Bakery = class Bakery {
             - VisitURL: the url to visit to authenticate with the IdM
           - jujugui: an optional value specifying a method to use against
             idm to authenticate. Used in non interactive authentication
-            scenarios
+            scenarios.
+      - sendRequest: a function used to make XHR HTTP requests, with the
+        following signature:
+        func(path, method, headers, body, withCredentials, callback) -> xhr.
+        By default an internal function is used. This is mostly for testing.
   */
-  constructor(httpClient, storage, params={}) {
-    this._client = httpClient;
-    this.storage = storage;
+  constructor(params={}) {
     this._onSuccess = params.onSuccess || (() => {});
+    this._sendRequest = params.sendRequest || _request;
+    this.storage = params.storage || new BakeryStorage(new InMemoryStore());
     this._visitPage = params.visitPage || (error => {
       window.open(error.Info.VisitURL, 'Login');
     });
     this._dischargeDisabled = false;
-  }
-
-  /**
-    Return a new bakery instance from the current one, in which the discharge
-    functionality is disabled.
-
-    Discharge required responses are just returned without executing the
-    macaroon acquisition process.
-
-    @return {Object} The new bakery instance.
-  */
-  withoutDischarge() {
-    const bakery = new Bakery(this._client, this.storage, {
-      onSuccess: this._onSuccess,
-      visitPage: this._visitPage
-    });
-    bakery._dischargeDisabled = true;
-    return bakery;
   }
 
   /**
@@ -124,8 +107,6 @@ const Bakery = class Bakery {
   sendRequest(url, method, headers, body, callback) {
     method = method.toLowerCase();
     // Prepare the send method and wrap the provided callback.
-    const methodStr = method.charAt(0).toUpperCase() + method.slice(1);
-    const send = this._client[`send${methodStr}Request`].bind(this._client);
     const wrappedCallback = this._wrapCallback(
       url, method, headers, body, callback);
     // Prepare the header. Include already stored macaroons in the header if
@@ -140,9 +121,6 @@ const Bakery = class Bakery {
       allHeaders[key] = value;
     });
     // Prepare the parameters for sending the HTTP request.
-    const username = null;
-    const password = null;
-
     // The only time we need the with credentials header is for cookie auth;
     // it's not pretty, but special casing here is the most direct solution.
     // Another option is to implement a factory method on bakery, e.g.
@@ -152,16 +130,9 @@ const Bakery = class Bakery {
     if (method === 'put' && url.indexOf('/set-auth-cookie') !== -1) {
       withCredentials = true;
     }
-    const progressCallback = null;
     // Send the request.
-    if (method === 'post' || method === 'put' || method === 'patch') {
-      return send(
-        url, allHeaders, body, username, password, withCredentials,
-        progressCallback, wrappedCallback);
-    }
-    return send(
-      url, allHeaders, username, password, withCredentials,
-      progressCallback, wrappedCallback);
+    return this._sendRequest(
+      url, method, allHeaders, body, withCredentials, wrappedCallback);
   }
 
   /**
@@ -373,13 +344,10 @@ const Bakery = class Bakery {
     this._visitPage(error);
     const generateRequest = callback => {
       const headers = {'Content-Type': JSON_CONTENT_TYPE};
-      const username = null;
-      const password = null;
+      const body = undefined;
       const withCredentials = false;
-      const progressCallback = null;
-      return this._client.sendGetRequest(
-        error.Info.WaitURL, headers, username, password, withCredentials,
-        progressCallback, callback);
+      return this._sendRequest(
+        error.Info.WaitURL, 'get', headers, body, withCredentials, callback);
     };
     // When performing a "wait" request for the user logging into identity
     // it is possible that they take longer than the server timeout of
@@ -458,6 +426,7 @@ const Bakery = class Bakery {
   }
 
 };
+
 
 /**
   A storage for the macaroon bakery.
@@ -575,7 +544,66 @@ const BakeryStorage = class BakeryStorage {
 
 };
 
+
+/**
+  An in-memory store for the BakeryStorage.
+*/
+class InMemoryStore {
+  constructor() {
+    this._items = {};
+  }
+  getItem(key) {
+    return this._items[key];
+  }
+  setItem(key, value) {
+    this._items[key] = value;
+  }
+  clear() {
+    this._items = {};
+  }
+}
+
+
+/**
+  Create, set up and send an asynchronous request to the given path/URL with
+  the given method and parameters.
+
+  @param {String} path The remote target path/URL.
+  @param {String} method The request method (e.g. "GET" or "POST").
+  @param {Object} headers Additional request headers as key/value pairs.
+  @param {Object} body The data to send as a file object, a string or in
+    general as an ArrayBufferView/Blob object.
+  @param {Boolean} withCredentials Whether to include credentials.
+  @param {Function} callback The load event callback.
+  @return {Object} The xhr asynchronous request instance.
+*/
+function _request(path, method, headers, body, withCredentials, callback) {
+  const xhr = new XMLHttpRequest({});
+  // Set up the event handlers.
+  const handler = evt => {
+    if (callback) {
+      callback(evt);
+    }
+    // The request has been completed: detach all the handlers.
+    xhr.removeEventListener('error', handler);
+    xhr.removeEventListener('load', handler);
+  };
+  xhr.addEventListener('error', handler, false);
+  xhr.addEventListener('load', handler, false);
+  // Set up the request.
+  xhr.open(method, path, true);
+  Object.keys(headers || {}).forEach(key => {
+    xhr.setRequestHeader(key, headers[key]);
+  });
+  if (withCredentials) {
+    xhr.withCredentials = withCredentials;
+  }
+  xhr.send(body || undefined);
+  return xhr;
+}
+
 module.exports = {
   Bakery,
-  BakeryStorage
+  BakeryStorage,
+  InMemoryStore
 };

@@ -23,63 +23,25 @@ global.window = {
   open: sinon.stub()
 };
 
-function setupFakes() {
-  const fakeLocalStorage = {
-    store: {},
-    getItem: function(item) {
-      return this.store[item];
-    },
-    setItem: function(item, value) {
-      this.store[item] = value;
-    },
-    removeItem: function(item) {
-      delete this.store[item];
-    }
+function setup(params={}, storageParams={}) {
+  const sendRequest = sinon.stub();
+  const store = new bakery.InMemoryStore();
+  storageParams.services = {
+    charmstore: 'http://example.com/charmstore',
+    otherService: 'http://example.com/other'
   };
-
-  const client = {
-    _sendRequest: sinon.stub(),
-    sendGetRequest: function(...args) {
-      this._sendRequest('get', ...args);
-    },
-    sendPostRequest: function(...args) {
-      this._sendRequest('post', ...args);
-    },
-    sendPutRequest: function(...args) {
-      this._sendRequest('put', ...args);
-    },
-    sendDeleteRequest: function(...args) {
-      this._sendRequest('delete', ...args);
-    },
-    sendPatchRequest: function(...args) {
-      this._sendRequest('patch', ...args);
-    }
-  };
-
-  const storage = new bakery.BakeryStorage(
-    fakeLocalStorage, {
-      services: {
-        charmstore: 'http://example.com/charmstore',
-        otherService: 'http://example.com/other'
-      }
-    }
-  );
-
-  const bakeryInstance = new bakery.Bakery(client, storage);
-
-  return {
-    bakeryInstance,
-    client,
-    fakeLocalStorage,
-    storage
-  };
+  const storage = new bakery.BakeryStorage(store, storageParams);
+  params.sendRequest = sendRequest;
+  params.storage = storage;
+  const bakeryInstance = new bakery.Bakery(params);
+  return {bakeryInstance, sendRequest, storage, store};
 }
 
 tap.test('can send requests', t => {
   t.autoend(true);
 
   t.test('sets the method', t => {
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     const url = 'http://example.com/';
     const headers = {header: 42};
     const callback = response => 42;
@@ -87,35 +49,34 @@ tap.test('can send requests', t => {
     let args;
     ['PATCH', 'post', 'PUT'].forEach(method => {
       bakeryInstance.sendRequest(url, method, headers, body, callback);
-      t.equal(client._sendRequest.callCount, 1);
-      args = client._sendRequest.args[0];
-      t.equal(args[0], method.toLowerCase());
-      t.equal(args[1], url);
+      t.equal(sendRequest.callCount, 1);
+      args = sendRequest.args[0];
+      t.equal(args[0], url);
+      t.equal(args[1], method.toLowerCase());
       t.deepEqual(args[2], {header: 42, 'Bakery-Protocol-Version': 1});
       t.equal(args[3], body);
-      t.type(args[8], 'function');
-      client._sendRequest.reset();
+      t.type(args[5], 'function');
+      sendRequest.reset();
     });
     ['GET', 'delete'].forEach(method => {
       bakeryInstance.sendRequest(url, method, headers, callback);
-      t.equal(client._sendRequest.callCount, 1);
-      args = client._sendRequest.args[0];
-      t.equal(args[0], method.toLowerCase());
-      t.equal(args[1], url);
+      t.equal(sendRequest.callCount, 1);
+      args = sendRequest.args[0];
+      t.equal(args[0], url);
+      t.equal(args[1], method.toLowerCase());
       t.deepEqual(args[2], {header: 42, 'Bakery-Protocol-Version': 1});
-      t.type(args[7], 'function');
-      client._sendRequest.reset();
+      t.type(args[5], 'function');
+      sendRequest.reset();
     });
     t.end();
   });
 
   t.test('properly handles cookie auth', t => {
-    const {bakeryInstance, client} = setupFakes();
-    const sendRequest = client._sendRequest;
+    const {bakeryInstance, sendRequest} = setup();
     const assertWithCredentials = (method, path, expectedValue) => {
       sendRequest.reset();
       bakeryInstance.sendRequest('http://example.com' + path, method);
-      t.equal(sendRequest.args[0][6], expectedValue, `${method} ${path}`);
+      t.equal(sendRequest.args[0][4], expectedValue, `${method} ${path}`);
     };
     // When sending PUT requests to "/set-auth-cookie" endpoints, the
     // "withCredentials" attribute is properly set to true on the request.
@@ -133,34 +94,33 @@ tap.test('can send requests', t => {
   });
 
   t.test('sets the headers', t => {
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     bakeryInstance.sendRequest('http://example.com/', 'GET', {'foo': 'bar'});
     const expectedHeaders = {
       'Bakery-Protocol-Version': 1,
       'foo': 'bar'
     };
-    t.deepEqual(client._sendRequest.args[0][2], expectedHeaders);
+    t.deepEqual(sendRequest.args[0][2], expectedHeaders);
     t.end();
   });
 
   t.test('adds macaroons to the request', t => {
-    const {bakeryInstance, client, fakeLocalStorage} = setupFakes();
+    const {bakeryInstance, sendRequest, store} = setup();
     // We add two "macaroons" into the store--one for the url we're setting,
     // one that we should not get.
-    fakeLocalStorage.store['charmstore'] = 'doctor';
-    fakeLocalStorage.store['identity'] = 'bad wolf';
-
+    store.setItem('charmstore', 'doctor');
+    store.setItem('identity', 'bad wolf');
     bakeryInstance.sendRequest('http://example.com/charmstore', 'GET');
     const expectedHeaders = {
       'Bakery-Protocol-Version': 1,
       'Macaroons': 'doctor'
     };
-    t.deepEqual(client._sendRequest.args[0][2], expectedHeaders);
+    t.deepEqual(sendRequest.args[0][2], expectedHeaders);
     t.end();
   });
 
   t.test('wraps callbacks with discharge functionality', t => {
-    const {bakeryInstance} = setupFakes();
+    const {bakeryInstance} = setup();
     const wrapper = sinon.stub(bakeryInstance, '_wrapCallback');
     bakeryInstance.sendRequest('http://example.com/', 'GET');
     t.equal(wrapper.callCount, 1);
@@ -180,7 +140,7 @@ tap.test('macaroon discharges', t => {
       dischargeMacaroon,
       importMacaroons: sinon.stub().returns([macaroon])
     });
-    const {bakeryInstance} = setupFakes();
+    const {bakeryInstance} = setup();
     const success = discharges => {
       t.deepEqual(discharges, [macaroonString]);
       stubReset();
@@ -203,7 +163,7 @@ tap.test('macaroon discharges', t => {
       dischargeMacaroon,
       importMacaroons: sinon.stub().returns([])
     });
-    const {bakeryInstance} = setupFakes();
+    const {bakeryInstance} = setup();
     const success = discharges => {
       t.fail('this should have failed');
     };
@@ -224,7 +184,7 @@ tap.test('macaroon discharges', t => {
       dischargeMacaroon,
       importMacaroons: sinon.stub().returns([])
     });
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     const condition = new TextEncoder().encode('this is a caveat'); // uint8array
     const success = macaroons => {};
     const failure = err => {};
@@ -232,10 +192,10 @@ tap.test('macaroon discharges', t => {
       'http://example.com/',
       'http://example.com/identity',
       condition, success, failure);
-    t.equal(client._sendRequest.callCount, 1);
-    const args = client._sendRequest.args[0];
-    t.equal(args[0], 'post');
-    t.equal(args[1], 'http://example.com/identity/discharge');
+    t.equal(sendRequest.callCount, 1);
+    const args = sendRequest.args[0];
+    t.equal(args[0], 'http://example.com/identity/discharge');
+    t.equal(args[1], 'post');
     t.deepEqual(args[2], {
       'Bakery-Protocol-Version': 1,
       'Content-Type': 'application/x-www-form-urlencoded'
@@ -265,7 +225,7 @@ tap.test('wrapped callbacks', t => {
 
   t.test('handles requests normally if nothing is needed', t => {
     const cb = sinon.stub();
-    const {bakeryInstance} = setupFakes();
+    const {bakeryInstance} = setup();
     const wrappedCB = bakeryInstance._wrapCallback(
       'http://example.com', 'POST', {}, 'body', cb);
     const target = getTarget();
@@ -275,7 +235,7 @@ tap.test('wrapped callbacks', t => {
   });
 
   t.test('handles interaction if needed', t => {
-    const {bakeryInstance} = setupFakes();
+    const {bakeryInstance} = setup();
     const interact = sinon.stub(bakeryInstance, '_interact');
     const cb = sinon.stub();
     const wrappedCB = bakeryInstance._wrapCallback(
@@ -296,7 +256,7 @@ tap.test('wrapped callbacks', t => {
   });
 
   t.test('handles discharge if needed', t => {
-    const {bakeryInstance} = setupFakes();
+    const {bakeryInstance} = setup();
     const dischargeStub = sinon.stub(bakeryInstance, 'discharge');
     const cb = sinon.stub();
     const wrappedCB = bakeryInstance._wrapCallback(
@@ -312,27 +272,6 @@ tap.test('wrapped callbacks', t => {
     t.end();
   });
 
-  t.test('do not acquire macaroons if discharge is disabled', t => {
-    let {bakeryInstance} = setupFakes();
-    bakeryInstance = bakeryInstance.withoutDischarge();
-    const dischargeStub = sinon.stub(bakeryInstance, 'discharge');
-    const cb = sinon.stub();
-    const wrappedCB = bakeryInstance._wrapCallback(
-      'http://example.com', 'POST', {}, 'body', cb);
-    const target = getTarget({
-      Code: 'macaroon discharge required',
-      Info: { Macaroon: 'macaroon' }
-    });
-    wrappedCB({target: target});
-    // Discharge has not been called.
-    t.equal(dischargeStub.callCount, 0, 'discharge call count');
-    t.equal(cb.callCount, 1, 'callback call count');
-    const args = cb.args[0];
-    t.equal(args.length, 2, 'callback args');
-    t.strictEqual(args[0], 'discharge required but disabled');
-    t.deepEqual(args[1].target, target);
-    t.end();
-  });
 });
 
 tap.test('interact handling', t => {
@@ -353,11 +292,9 @@ tap.test('interact handling', t => {
   };
 
   t.test('accepts a visit page method', t => {
-    let {bakeryInstance, client, storage} = setupFakes();
-    const params = {
+    let {bakeryInstance} = setup({
       visitPage: () => { return 'visits'; }
-    };
-    bakeryInstance = new bakery.Bakery(client, storage, params);
+    });
     t.equal(bakeryInstance._visitPage(), 'visits');
     t.end();
   });
@@ -366,7 +303,7 @@ tap.test('interact handling', t => {
     global.window = {
       open: sinon.stub()
     };
-    const {bakeryInstance} = setupFakes();
+    const {bakeryInstance} = setup();
     const error = {
       Info: {
         VisitURL: 'http://example.com'
@@ -379,7 +316,7 @@ tap.test('interact handling', t => {
   });
 
   t.test('sets the content type correctly for the wait call', t => {
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     const error = {
       Info: {
         WaitURL: 'http://example.com/wait',
@@ -387,53 +324,53 @@ tap.test('interact handling', t => {
       }
     };
     bakeryInstance._interact(error, ()=>{}, ()=>{});
-    t.equal(client._sendRequest.callCount, 1);
+    t.equal(sendRequest.callCount, 1);
     t.equal(
-      client._sendRequest.args[0][1], 'http://example.com/wait');
+      sendRequest.args[0][0], 'http://example.com/wait');
     t.equal(
-      client._sendRequest.args[0][2]['Content-Type'], 'application/json');
+      sendRequest.args[0][2]['Content-Type'], 'application/json');
     t.end();
   });
 
   t.test('handles retry', t => {
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     const error = {
       Info: {
         WaitURL: 'http://example.com/wait',
         VisitURL: 'http://example.com/visit'
       }
     };
-    client._sendRequest
-      .onFirstCall().callsArgWith(7, getResponse(true))
-      .onSecondCall().callsArgWith(7, getResponse(false));
+    sendRequest
+      .onFirstCall().callsArgWith(5, getResponse(true))
+      .onSecondCall().callsArgWith(5, getResponse(false));
     bakeryInstance._interact(error, ()=>{}, ()=>{});
-    t.equal(client._sendRequest.callCount, 2);
+    t.equal(sendRequest.callCount, 2);
     t.end();
   });
 
   t.test('limits retries', t => {
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     const error = {
       Info: {
         WaitURL: 'http://example.com/wait',
         VisitURL: 'http://example.com/visit'
       }
     };
-    client._sendRequest.callsArgWith(7, getResponse(true));
+    sendRequest.callsArgWith(5, getResponse(true));
     bakeryInstance._interact(error, ()=>{}, ()=>{});
-    t.equal(client._sendRequest.callCount, 6); // 6 is retrycount limit
+    t.equal(sendRequest.callCount, 6); // 6 is retrycount limit
     t.end();
   });
 
   t.test('handles errors', t => {
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     const error = {
       Info: {
         WaitURL: 'http://example.com/wait',
         VisitURL: 'http://example.com/visit'
       }
     };
-    client._sendRequest.callsArgWith(7, getResponse(true));
+    sendRequest.callsArgWith(5, getResponse(true));
     sinon.stub(bakeryInstance, '_getError').returns({'message': 'bad wolf'});
     const ok = sinon.stub();
     const fail = sinon.stub();
@@ -445,14 +382,14 @@ tap.test('interact handling', t => {
   });
 
   t.test('handles success', t => {
-    const {bakeryInstance, client} = setupFakes();
+    const {bakeryInstance, sendRequest} = setup();
     const error = {
       Info: {
         WaitURL: 'http://example.com/wait',
         VisitURL: 'http://example.com/visit'
       }
     };
-    client._sendRequest.callsArgWith(7, getResponse(true));
+    sendRequest.callsArgWith(5, getResponse(true));
     sinon.stub(bakeryInstance, '_getError').returns(null);
     const ok = sinon.stub();
     const fail = sinon.stub();
@@ -467,30 +404,23 @@ tap.test('storage', t => {
   t.autoend(true);
 
   t.test('sets items', t => {
-    const {fakeLocalStorage, storage} = setupFakes();
+    const {storage, store} = setup();
     storage.set('http://example.com/charmstore', 'foo', () => {});
-    t.equal(fakeLocalStorage.store['charmstore'], 'foo');
+    t.equal(store.getItem('charmstore'), 'foo');
     t.end();
   });
 
   t.test('gets items', t => {
-    const {fakeLocalStorage, storage} = setupFakes();
-    fakeLocalStorage.store['charmstore'] = 'foo';
+    const {storage, store} = setup();
+    store.setItem('charmstore', 'foo');
     t.equal('foo', storage.get('http://example.com/charmstore'));
     t.end();
   });
 
   t.test('sets cookies for charmstore', t => {
-    let {fakeLocalStorage, storage} = setupFakes();
     global.atob = atob;
     const cookieSet = sinon.stub();
-    const params = {
-      services: {
-        charmstore: 'http://example.com/charmstore'
-      },
-      charmstoreCookieSetter: cookieSet
-    };
-    storage = new bakery.BakeryStorage(fakeLocalStorage, params);
+    let {storage} = setup({}, {charmstoreCookieSetter: cookieSet});
     const macaroonValue = btoa(JSON.stringify('macaroon'));
     storage.set('http://example.com/charmstore', macaroonValue, () => {});
     t.equal(cookieSet.callCount, 1);
@@ -502,7 +432,7 @@ tap.test('storage', t => {
     t.autoend(true);
 
     t.test('removes discharge suffix', t => {
-      const {storage} = setupFakes();
+      const {storage} = setup();
       t.equal(
         'http://example.com/identity',
         storage._getKey('http://example.com/identity/discharge'));
@@ -510,7 +440,7 @@ tap.test('storage', t => {
     });
 
     t.test('gets keys from services', t => {
-      const {storage} = setupFakes();
+      const {storage} = setup();
       t.equal(
         'charmstore',
         storage._getKey('http://example.com/charmstore'));
@@ -518,7 +448,7 @@ tap.test('storage', t => {
     });
 
     t.test('does not modify other keys', t => {
-      const {storage} = setupFakes();
+      const {storage} = setup();
       t.equal('a-key', storage._getKey('a-key'));
       t.end();
     });
