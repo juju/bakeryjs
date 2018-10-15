@@ -1,6 +1,6 @@
 {
   "name": "macaroon-bakery",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Perform macaroon aware network requests",
   "main": "index.js",
   "scripts": {
