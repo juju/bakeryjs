@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/juju/bakeryjs#readme",
   "dependencies": {
-    "macaroon": "^3.0.1"
+    "macaroon": "^3.0.3"
   },
   "devDependencies": {
     "atob": "^2.1.1",
