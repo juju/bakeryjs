@@ -18,14 +18,14 @@
   },
   "homepage": "https://github.com/juju/bakeryjs#readme",
   "dependencies": {
-    "macaroon": "^3.0.3"
+    "macaroon": "^3.0.4"
   },
   "devDependencies": {
     "atob": "^2.1.2",
     "btoa": "^1.2.1",
-    "eslint": "^5.7.0",
+    "eslint": "^5.16.0",
     "rewire": "^4.0.1",
-    "sinon": "^7.0.0",
-    "tap": "^12.0.1"
+    "sinon": "^7.3.2",
+    "tap": "^13.1.8"
   }
 }
