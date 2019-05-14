@@ -319,7 +319,15 @@ const Bakery = class Bakery {
         onFailure(err);
         return;
       }
-      const jsonResponse = JSON.parse(response.target.responseText);
+      let jsonResponse = '';
+      try {
+        // It's possible that the response is empty or invalid because of
+        // invalid certs, or 500's, etc.
+        jsonResponse = JSON.parse(response.target.responseText);
+      } catch(e) {
+        onFailure('unable to parse macaroon.');
+        return;
+      }
       const macaroons = macaroonlib.importMacaroons(jsonResponse.Macaroon)[0];
       onSuccess(macaroons);
     };
