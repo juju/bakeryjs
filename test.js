@@ -206,6 +206,42 @@ tap.test('macaroon discharges', t => {
     stubReset();
     t.end();
   });
+
+  t.test('handles failure parsing third party maracoon data', t => {
+    const dischargeMacaroon = sinon.stub();
+    const stubReset = bakery.__set__('macaroonlib', {
+      dischargeMacaroon,
+      importMacaroons: sinon.stub().returns([])
+    });
+    const {bakeryInstance, sendRequest} = setup();
+    const condition = new TextEncoder().encode('this is a caveat'); // uint8array
+    const success = macaroons => {};
+    const failure = err => {
+      t.equal(err, 'unable to parse macaroon.');
+      stubReset();
+      t.end();
+    };
+    bakeryInstance._getThirdPartyDischarge(
+      'http://example.com/',
+      'http://example.com/identity',
+      condition, success, failure);
+    t.equal(sendRequest.callCount, 1);
+    const args = sendRequest.args[0];
+    t.equal(args[0], 'http://example.com/identity/discharge');
+    t.equal(args[1], 'post');
+    t.deepEqual(args[2], {
+      'Bakery-Protocol-Version': 1,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    });
+    t.equal(
+      args[3],
+      'id=this%20is%20a%20caveat&location=http%3A%2F%2Fexample.com%2F');
+    // When a request fails the target has no responseText so this simulates
+    // that type of failure.
+    args[5]({
+      target: {}
+    });
+  });
 });
 
 tap.test('wrapped callbacks', t => {
