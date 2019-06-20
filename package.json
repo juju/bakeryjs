@@ -1,6 +1,6 @@
 {
   "name": "@canonical/macaroon-bakery",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Perform macaroon aware network requests",
   "main": "index.js",
   "scripts": {
