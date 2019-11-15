@@ -232,6 +232,7 @@ const Bakery = class Bakery {
 
     See the "sendRequest" method above for a description of the parameters.
 
+    @private
     @return {Function} A callable accepting an HTTP response.
   */
   _wrapCallback(url, method, headers, body, callback) {
@@ -308,6 +309,7 @@ const Bakery = class Bakery {
   /**
     Obtain a discharge macaroon for the given third party location.
 
+    @private
     @param {String} location The origin location.
     @param {String} thirdPartyLocation The third party location where to
       discharge.
@@ -351,6 +353,7 @@ const Bakery = class Bakery {
   /**
     Interact to be able to acquire authentication macaroons.
 
+    @private
     @param {String} visitURL The URL that must be visited to authenticate.
     @param {String} waitURL The URL where to wait for the authentication to
       be completed, and that will eventually provide the authentication
@@ -403,6 +406,7 @@ const Bakery = class Bakery {
   /**
     Return any error present in the given response.
 
+    @private
     @param {Object} target The XHR response.target.
     @return {Object | String} The error as found in the request.
   */
@@ -432,6 +436,7 @@ const Bakery = class Bakery {
     Try to parse the given JSON decoded response in order to retrieve a
     human friendly error.
 
+    @private
     @param {Object} jsonResponse The JSON decoded response text.
     @return {String} The error message.
   */
@@ -541,6 +546,7 @@ const BakeryStorage = class BakeryStorage {
     surely useful to be able to set or retrieve a service macaroon by using
     its corresponding service name (and not necessarily a URL).
 
+    @private
     @param {String} key The original key.
     @return {String} A possibly simplified/reduced key.
   */
@@ -587,7 +593,7 @@ class InMemoryStore {
 /**
   Create, set up and send an asynchronous request to the given path/URL with
   the given method and parameters.
-
+  @private
   @param {String} path The remote target path/URL.
   @param {String} method The request method (e.g. "GET" or "POST").
   @param {Object} headers Additional request headers as key/value pairs.

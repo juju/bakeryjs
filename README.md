@@ -24,21 +24,14 @@ bakery.get(url, headers, callback)
         * [.put()](#module_bakeryjs..Bakery+put)
         * [.patch()](#module_bakeryjs..Bakery+patch)
         * [.discharge(macaroon, onSuccess, onFailure)](#module_bakeryjs..Bakery+discharge)
-        * [._wrapCallback()](#module_bakeryjs..Bakery+_wrapCallback) ⇒ <code>function</code>
-        * [._getThirdPartyDischarge(location, thirdPartyLocation, condition, onSuccess, onFailure)](#module_bakeryjs..Bakery+_getThirdPartyDischarge)
-        * [._interact(visitURL, waitURL, onSuccess, onFailure)](#module_bakeryjs..Bakery+_interact)
-        * [._getError(target)](#module_bakeryjs..Bakery+_getError) ⇒ <code>Object</code> \| <code>String</code>
-        * [._getErrorMessage(jsonResponse)](#module_bakeryjs..Bakery+_getErrorMessage) ⇒ <code>String</code>
     * [~BakeryStorage](#module_bakeryjs..BakeryStorage)
         * [new BakeryStorage(store, params)](#new_module_bakeryjs..BakeryStorage_new)
         * [.get(key)](#module_bakeryjs..BakeryStorage+get) ⇒ <code>String</code>
         * [.set(key, value, callback)](#module_bakeryjs..BakeryStorage+set)
         * [.clear()](#module_bakeryjs..BakeryStorage+clear)
-        * [._getKey(key)](#module_bakeryjs..BakeryStorage+_getKey) ⇒ <code>String</code>
     * [~InMemoryStore](#module_bakeryjs..InMemoryStore)
     * [~serialize(macaroons)](#module_bakeryjs..serialize) ⇒ <code>string</code>
     * [~deserialize(serialized)](#module_bakeryjs..deserialize) ⇒ <code>Array</code>
-    * [~_request(path, method, headers, body, withCredentials, callback)](#module_bakeryjs.._request) ⇒ <code>Object</code>
 
 <a name="module_bakeryjs..Bakery"></a>
 
@@ -59,11 +52,6 @@ A macaroon bakery implementation.
     * [.put()](#module_bakeryjs..Bakery+put)
     * [.patch()](#module_bakeryjs..Bakery+patch)
     * [.discharge(macaroon, onSuccess, onFailure)](#module_bakeryjs..Bakery+discharge)
-    * [._wrapCallback()](#module_bakeryjs..Bakery+_wrapCallback) ⇒ <code>function</code>
-    * [._getThirdPartyDischarge(location, thirdPartyLocation, condition, onSuccess, onFailure)](#module_bakeryjs..Bakery+_getThirdPartyDischarge)
-    * [._interact(visitURL, waitURL, onSuccess, onFailure)](#module_bakeryjs..Bakery+_interact)
-    * [._getError(target)](#module_bakeryjs..Bakery+_getError) ⇒ <code>Object</code> \| <code>String</code>
-    * [._getErrorMessage(jsonResponse)](#module_bakeryjs..Bakery+_getErrorMessage) ⇒ <code>String</code>
 
 <a name="new_module_bakeryjs..Bakery_new"></a>
 
@@ -156,70 +144,6 @@ Discharge the given macaroon. Acquire any third party discharges.
 | onSuccess | <code>function</code> | The function to be called if the       discharge succeeds. It receives the resulting macaroons array. |
 | onFailure | <code>function</code> | The function to be called if the       discharge fails. It receives an error message. |
 
-<a name="module_bakeryjs..Bakery+_wrapCallback"></a>
-
-#### bakery.\_wrapCallback() ⇒ <code>function</code>
-Wrap the given callback function so that "discharge required" and
-    "interaction required" errors in the response are internally handled.
-
-    See the "sendRequest" method above for a description of the parameters.
-
-**Kind**: instance method of [<code>Bakery</code>](#module_bakeryjs..Bakery)  
-**Returns**: <code>function</code> - A callable accepting an HTTP response.  
-<a name="module_bakeryjs..Bakery+_getThirdPartyDischarge"></a>
-
-#### bakery.\_getThirdPartyDischarge(location, thirdPartyLocation, condition, onSuccess, onFailure)
-Obtain a discharge macaroon for the given third party location.
-
-**Kind**: instance method of [<code>Bakery</code>](#module_bakeryjs..Bakery)  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| location | <code>String</code> | The origin location. |
-| thirdPartyLocation | <code>String</code> | The third party location where to       discharge. |
-| condition | <code>Uint8Array</code> | The caveat to be discharged. |
-| onSuccess | <code>function</code> | A function that will be called with the       discharge macaroon when the acquisition is successfully completed. |
-| onFailure | <code>function</code> | A function that will be called with an error       message when the third party discharge fails. |
-
-<a name="module_bakeryjs..Bakery+_interact"></a>
-
-#### bakery.\_interact(visitURL, waitURL, onSuccess, onFailure)
-Interact to be able to acquire authentication macaroons.
-
-**Kind**: instance method of [<code>Bakery</code>](#module_bakeryjs..Bakery)  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| visitURL | <code>String</code> | The URL that must be visited to authenticate. |
-| waitURL | <code>String</code> | The URL where to wait for the authentication to       be completed, and that will eventually provide the authentication       macaroons and the discharge token. |
-| onSuccess | <code>function</code> | The function that will be called with the       macaroon when the acquisition succeeds. |
-| onFailure | <code>function</code> | The function that will be called with an       error string when the acquisition fails. |
-
-<a name="module_bakeryjs..Bakery+_getError"></a>
-
-#### bakery.\_getError(target) ⇒ <code>Object</code> \| <code>String</code>
-Return any error present in the given response.
-
-**Kind**: instance method of [<code>Bakery</code>](#module_bakeryjs..Bakery)  
-**Returns**: <code>Object</code> \| <code>String</code> - The error as found in the request.  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| target | <code>Object</code> | The XHR response.target. |
-
-<a name="module_bakeryjs..Bakery+_getErrorMessage"></a>
-
-#### bakery.\_getErrorMessage(jsonResponse) ⇒ <code>String</code>
-Try to parse the given JSON decoded response in order to retrieve a
-    human friendly error.
-
-**Kind**: instance method of [<code>Bakery</code>](#module_bakeryjs..Bakery)  
-**Returns**: <code>String</code> - The error message.  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| jsonResponse | <code>Object</code> | The JSON decoded response text. |
-
 <a name="module_bakeryjs..BakeryStorage"></a>
 
 ### bakeryjs~BakeryStorage
@@ -234,7 +158,6 @@ A storage for the macaroon bakery.
     * [.get(key)](#module_bakeryjs..BakeryStorage+get) ⇒ <code>String</code>
     * [.set(key, value, callback)](#module_bakeryjs..BakeryStorage+set)
     * [.clear()](#module_bakeryjs..BakeryStorage+clear)
-    * [._getKey(key)](#module_bakeryjs..BakeryStorage+_getKey) ⇒ <code>String</code>
 
 <a name="new_module_bakeryjs..BakeryStorage_new"></a>
 
@@ -280,26 +203,6 @@ Store the given value in the given storage key.
 Remove all key/value pairs from the storage.
 
 **Kind**: instance method of [<code>BakeryStorage</code>](#module_bakeryjs..BakeryStorage)  
-<a name="module_bakeryjs..BakeryStorage+_getKey"></a>
-
-#### bakeryStorage.\_getKey(key) ⇒ <code>String</code>
-Turn the given key (usually a URL) into a more friendly service name,
-    when possible. This also means that different endpoints of the same
-    service are reduced to the same service name key, which is ok given that
-    all our services use the same macaroon root id for all endpoints.
-
-    If the given key is not a URL, then return it untouched, so that it is
-    still possible to set arbitrary keys in the storage. For instance, it is
-    surely useful to be able to set or retrieve a service macaroon by using
-    its corresponding service name (and not necessarily a URL).
-
-**Kind**: instance method of [<code>BakeryStorage</code>](#module_bakeryjs..BakeryStorage)  
-**Returns**: <code>String</code> - A possibly simplified/reduced key.  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| key | <code>String</code> | The original key. |
-
 <a name="module_bakeryjs..InMemoryStore"></a>
 
 ### bakeryjs~InMemoryStore
@@ -329,24 +232,6 @@ De-serialize the given serialized macaroons.
 | Param | Type | Description |
 | --- | --- | --- |
 | serialized | <code>string</code> | The serialized macaroons. |
-
-<a name="module_bakeryjs.._request"></a>
-
-### bakeryjs~\_request(path, method, headers, body, withCredentials, callback) ⇒ <code>Object</code>
-Create, set up and send an asynchronous request to the given path/URL with
-  the given method and parameters.
-
-**Kind**: inner method of [<code>bakeryjs</code>](#module_bakeryjs)  
-**Returns**: <code>Object</code> - The xhr asynchronous request instance.  
-
-| Param | Type | Description |
-| --- | --- | --- |
-| path | <code>String</code> | The remote target path/URL. |
-| method | <code>String</code> | The request method (e.g. "GET" or "POST"). |
-| headers | <code>Object</code> | Additional request headers as key/value pairs. |
-| body | <code>Object</code> | The data to send as a file object, a string or in     general as an ArrayBufferView/Blob object. |
-| withCredentials | <code>Boolean</code> | Whether to include credentials. |
-| callback | <code>function</code> | The load event callback. |
 
 
 * * *
