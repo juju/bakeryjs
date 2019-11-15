@@ -68,28 +68,21 @@ const Bakery = class Bakery {
   /**
     Initialize a macaroon bakery with the given parameters.
 
-    @param {Object} params Optional parameters including:
-      - onSuccess: a function to be called when the request completes
-        properly. It defaults to a no-op function.
-      - storage: the storage used to persist macaroons. It must implement the
+    @param {Object} config - optional config.
+    @param {Function} config.onSuccess - a function to be called when the request completes
+        properly.
+    @param {Function} config.storage - the storage used to persist macaroons. It must implement the
         following interface:
-        - get(key) -> value;
-        - set(key, value, callback): the callback is called without arguments
-          when the set operation has been performed.
-        If not provided, it defaults to BakeryStorage using an in memory store.
-      - visitPage: the function used to visit the identity provider page when
-        required, defaulting to opening a pop up window. It receives an
-        error object containing:
-          - Info: an object containing relevant info for the visit handling:
-            - WaitURL: the url to wait on for IdM discharge
-            - VisitURL: the url to visit to authenticate with the IdM
-          - jujugui: an optional value specifying a method to use against
-            idm to authenticate. Used in non interactive authentication
-            scenarios.
-      - sendRequest: a function used to make XHR HTTP requests, with the
-        following signature:
-        func(path, method, headers, body, withCredentials, callback) -> xhr.
-        By default an internal function is used. This is mostly for testing.
+    @param {Function} config.storage.get - get(key) -> value.
+    @param {Function} config.storage.set - set(key, value, callback): the callback is called without arguments
+          when the set operation has been performed. If not provided, it defaults to BakeryStorage using an in memory store.
+    @param {Function} config.visitPage - the function used to visit the identity provider page when required, defaulting to opening a pop up window. It receives an
+        error object.
+    @param {Object} config.visitPage.Info - an object containing relevant info for the visit handling.
+    @param {String} config.visitPage.Info.WaitUrl - the url to wait on for IdM discharge.
+    @param {String} config.visitPage.Info.VisitUrl - the url to visit to authenticate with the IdM.
+    @param {Function} config.visitPage.jujugui - an optional value specifying a method to use against idm to authenticate. Used in non interactive authentication scenarios.
+    @param {Function} config.sendRequest -  a function used to make XHR HTTP requests, with the following signature: func(path, method, headers, body, withCredentials, callback) -> xhr. By default an internal function is used. This is mostly for testing.
   */
   constructor(params={}) {
     this._onSuccess = params.onSuccess || (() => {});
@@ -467,13 +460,12 @@ const BakeryStorage = class BakeryStorage {
       - getItem(key) -> value;
       - setItem(key, value);
       - clear().
-    @param {Object} params Optional parameters including:
-      - initial: a map of key/value pairs that must be initially included in
-        the storage;
-      - services: a map of service names (like "charmstore" or "terms") to
+    @param {Object} config - Optional configuration.
+    @param {Object} config.initial - a map of key/value pairs that must be initially included in
+    @param {Object} config.services - a map of service names (like "charmstore" or "terms") to
         the base URL of their corresponding API endpoints. This is used to
-        simplify and reduce the URLs passed as keys to the storage;
-      - charmstoreCookieSetter: a function that can be used to register
+        simplify and reduce the URLs passed as keys to the storage.
+    @param {Function} config.charmstoreCookieSetter - a function that can be used to register
         macaroons to the charm store service. The function accepts a value
         and a callback, which receives an error and a response.
   */

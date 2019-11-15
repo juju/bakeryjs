@@ -16,7 +16,7 @@ bakery.get(url, headers, callback)
 
 * [bakeryjs](#module_bakeryjs)
     * [~Bakery](#module_bakeryjs..Bakery)
-        * [new Bakery(params)](#new_module_bakeryjs..Bakery_new)
+        * [new Bakery(config)](#new_module_bakeryjs..Bakery_new)
         * [.sendRequest(url, method, headers, body, callback)](#module_bakeryjs..Bakery+sendRequest) ⇒ <code>Object</code>
         * [.get()](#module_bakeryjs..Bakery+get)
         * [.delete()](#module_bakeryjs..Bakery+delete)
@@ -25,7 +25,7 @@ bakery.get(url, headers, callback)
         * [.patch()](#module_bakeryjs..Bakery+patch)
         * [.discharge(macaroon, onSuccess, onFailure)](#module_bakeryjs..Bakery+discharge)
     * [~BakeryStorage](#module_bakeryjs..BakeryStorage)
-        * [new BakeryStorage(store, params)](#new_module_bakeryjs..BakeryStorage_new)
+        * [new BakeryStorage(store, config)](#new_module_bakeryjs..BakeryStorage_new)
         * [.get(key)](#module_bakeryjs..BakeryStorage+get) ⇒ <code>String</code>
         * [.set(key, value, callback)](#module_bakeryjs..BakeryStorage+set)
         * [.clear()](#module_bakeryjs..BakeryStorage+clear)
@@ -44,7 +44,7 @@ A macaroon bakery implementation.
 **Kind**: inner class of [<code>bakeryjs</code>](#module_bakeryjs)  
 
 * [~Bakery](#module_bakeryjs..Bakery)
-    * [new Bakery(params)](#new_module_bakeryjs..Bakery_new)
+    * [new Bakery(config)](#new_module_bakeryjs..Bakery_new)
     * [.sendRequest(url, method, headers, body, callback)](#module_bakeryjs..Bakery+sendRequest) ⇒ <code>Object</code>
     * [.get()](#module_bakeryjs..Bakery+get)
     * [.delete()](#module_bakeryjs..Bakery+delete)
@@ -55,13 +55,23 @@ A macaroon bakery implementation.
 
 <a name="new_module_bakeryjs..Bakery_new"></a>
 
-#### new Bakery(params)
+#### new Bakery(config)
 Initialize a macaroon bakery with the given parameters.
 
 
 | Param | Type | Description |
 | --- | --- | --- |
-| params | <code>Object</code> | Optional parameters including:       - onSuccess: a function to be called when the request completes         properly. It defaults to a no-op function.       - storage: the storage used to persist macaroons. It must implement the         following interface:         - get(key) -> value;         - set(key, value, callback): the callback is called without arguments           when the set operation has been performed.         If not provided, it defaults to BakeryStorage using an in memory store.       - visitPage: the function used to visit the identity provider page when         required, defaulting to opening a pop up window. It receives an         error object containing:           - Info: an object containing relevant info for the visit handling:             - WaitURL: the url to wait on for IdM discharge             - VisitURL: the url to visit to authenticate with the IdM           - jujugui: an optional value specifying a method to use against             idm to authenticate. Used in non interactive authentication             scenarios.       - sendRequest: a function used to make XHR HTTP requests, with the         following signature:         func(path, method, headers, body, withCredentials, callback) -> xhr.         By default an internal function is used. This is mostly for testing. |
+| config | <code>Object</code> | optional config. |
+| config.onSuccess | <code>function</code> | a function to be called when the request completes         properly. |
+| config.storage | <code>function</code> | the storage used to persist macaroons. It must implement the         following interface: |
+| config.storage.get | <code>function</code> | get(key) -> value. |
+| config.storage.set | <code>function</code> | set(key, value, callback): the callback is called without arguments           when the set operation has been performed. If not provided, it defaults to BakeryStorage using an in memory store. |
+| config.visitPage | <code>function</code> | the function used to visit the identity provider page when required, defaulting to opening a pop up window. It receives an         error object. |
+| config.visitPage.Info | <code>Object</code> | an object containing relevant info for the visit handling. |
+| config.visitPage.Info.WaitUrl | <code>String</code> | the url to wait on for IdM discharge. |
+| config.visitPage.Info.VisitUrl | <code>String</code> | the url to visit to authenticate with the IdM. |
+| config.visitPage.jujugui | <code>function</code> | an optional value specifying a method to use against idm to authenticate. Used in non interactive authentication scenarios. |
+| config.sendRequest | <code>function</code> | a function used to make XHR HTTP requests, with the following signature: func(path, method, headers, body, withCredentials, callback) -> xhr. By default an internal function is used. This is mostly for testing. |
 
 <a name="module_bakeryjs..Bakery+sendRequest"></a>
 
@@ -154,21 +164,24 @@ A storage for the macaroon bakery.
 **Kind**: inner class of [<code>bakeryjs</code>](#module_bakeryjs)  
 
 * [~BakeryStorage](#module_bakeryjs..BakeryStorage)
-    * [new BakeryStorage(store, params)](#new_module_bakeryjs..BakeryStorage_new)
+    * [new BakeryStorage(store, config)](#new_module_bakeryjs..BakeryStorage_new)
     * [.get(key)](#module_bakeryjs..BakeryStorage+get) ⇒ <code>String</code>
     * [.set(key, value, callback)](#module_bakeryjs..BakeryStorage+set)
     * [.clear()](#module_bakeryjs..BakeryStorage+clear)
 
 <a name="new_module_bakeryjs..BakeryStorage_new"></a>
 
-#### new BakeryStorage(store, params)
+#### new BakeryStorage(store, config)
 Initialize a bakery storage with the given underlaying store and params.
 
 
 | Param | Type | Description |
 | --- | --- | --- |
 | store | <code>Object</code> | A store object implement the following interface:       - getItem(key) -> value;       - setItem(key, value);       - clear(). |
-| params | <code>Object</code> | Optional parameters including:       - initial: a map of key/value pairs that must be initially included in         the storage;       - services: a map of service names (like "charmstore" or "terms") to         the base URL of their corresponding API endpoints. This is used to         simplify and reduce the URLs passed as keys to the storage;       - charmstoreCookieSetter: a function that can be used to register         macaroons to the charm store service. The function accepts a value         and a callback, which receives an error and a response. |
+| config | <code>Object</code> | Optional configuration. |
+| config.initial | <code>Object</code> | a map of key/value pairs that must be initially included in |
+| config.services | <code>Object</code> | a map of service names (like "charmstore" or "terms") to         the base URL of their corresponding API endpoints. This is used to         simplify and reduce the URLs passed as keys to the storage. |
+| config.charmstoreCookieSetter | <code>function</code> | a function that can be used to register         macaroons to the charm store service. The function accepts a value         and a callback, which receives an error and a response. |
 
 <a name="module_bakeryjs..BakeryStorage+get"></a>
 
