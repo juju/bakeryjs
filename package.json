@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "tap --cov test.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "docs": "jsdoc2md -t jsdoc2md/README.hbs index.js > README.md; echo"
   },
   "repository": {
     "type": "git",
@@ -24,6 +25,7 @@
     "atob": "^2.1.2",
     "btoa": "^1.2.1",
     "eslint": "^5.16.0",
+    "jsdoc-to-markdown": "^5.0.2",
     "rewire": "^4.0.1",
     "sinon": "^7.3.2",
     "tap": "^14.2.4"

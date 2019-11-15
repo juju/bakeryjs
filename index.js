@@ -2,6 +2,18 @@
 
 'use strict';
 
+/**
+ * bakeryjs.
+ * @module bakeryjs
+ * @example
+ * ```js
+ * import { Bakery } from "@canonical/macaroon-bakery";
+ * const bakery = new Bakery();
+ *
+ * bakery.get(url, headers, callback)
+ * ```
+ */
+
 const macaroonlib = require('macaroon');
 
 // Define the bakery protocol version used by the GUI.
@@ -392,7 +404,7 @@ const Bakery = class Bakery {
     Return any error present in the given response.
 
     @param {Object} target The XHR response.target.
-    @return {Object or String} The error as found in the request.
+    @return {Object | String} The error as found in the request.
   */
   _getError(target) {
     // Check bakery statuses.
