@@ -1,6 +1,6 @@
 /* Copyright (C) 2018 Canonical Ltd. */
 
-'use strict';
+"use strict";
 
 /**
  * bakeryjs.
@@ -14,24 +14,24 @@
  * ```
  */
 
-const macaroonlib = require('macaroon');
+const macaroonlib = require("macaroon");
 
 // Define the bakery protocol version used by the GUI.
 const PROTOCOL_VERSION = 1;
 // Define the HTTP content type for JSON and encoded form requests.
-const JSON_CONTENT_TYPE = 'application/json';
-const WWW_FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
+const JSON_CONTENT_TYPE = "application/json";
+const WWW_FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
 // Define HTTP statuses.
 const STATUS_UNAUTHORIZED = 401;
 const STATUS_PROXY_AUTH_REQUIRED = 407;
 // Define bakery specific errors.
-const ERR_DISCHARGE_REQUIRED = 'macaroon discharge required';
-const ERR_INTERACTION_REQUIRED = 'interaction required';
+const ERR_DISCHARGE_REQUIRED = "macaroon discharge required";
+const ERR_INTERACTION_REQUIRED = "interaction required";
 
 let TextDecoder;
-if (typeof window === 'undefined') {
+if (typeof window === "undefined") {
   // No window if it's node.js.
-  const util = require('util');
+  const util = require("util");
   TextDecoder = util.TextDecoder;
 } else {
   TextDecoder = window.TextDecoder;
@@ -43,7 +43,7 @@ if (typeof window === 'undefined') {
   @param {Array} macaroons The macaroons to be serialized.
   @return {string} The resulting serialized string.
 */
-const serialize = macaroons => {
+const serialize = (macaroons) => {
   return btoa(JSON.stringify(macaroons));
 };
 
@@ -53,7 +53,7 @@ const serialize = macaroons => {
   @param {string} serialized The serialized macaroons.
   @return {Array} The resulting macaroon slice.
 */
-const deserialize = serialized => {
+const deserialize = (serialized) => {
   return JSON.parse(atob(serialized));
 };
 
@@ -64,33 +64,45 @@ const deserialize = serialized => {
   over HTTP.
 */
 const Bakery = class Bakery {
-
   /**
     Initialize a macaroon bakery with the given parameters.
 
     @param {Object} config - optional config.
-    @param {Function} config.onSuccess - a function to be called when the request completes
-        properly.
-    @param {Function} config.storage - the storage used to persist macaroons. It must implement the
-        following interface:
+    @param {Function} config.onSuccess - a function to be called when the
+      request completes properly.
+    @param {Function} config.storage - the storage used to persist macaroons.
+      It must implement the following interface:
     @param {Function} config.storage.get - get(key) -> value.
-    @param {Function} config.storage.set - set(key, value, callback): the callback is called without arguments
-          when the set operation has been performed. If not provided, it defaults to BakeryStorage using an in memory store.
-    @param {Function} config.visitPage - the function used to visit the identity provider page when required, defaulting to opening a pop up window. It receives an
-        error object.
-    @param {Object} config.visitPage.Info - an object containing relevant info for the visit handling.
-    @param {String} config.visitPage.Info.WaitUrl - the url to wait on for IdM discharge.
-    @param {String} config.visitPage.Info.VisitUrl - the url to visit to authenticate with the IdM.
-    @param {Function} config.visitPage.jujugui - an optional value specifying a method to use against idm to authenticate. Used in non interactive authentication scenarios.
-    @param {Function} config.sendRequest -  a function used to make XHR HTTP requests, with the following signature: func(path, method, headers, body, withCredentials, callback) -> xhr. By default an internal function is used. This is mostly for testing.
+    @param {Function} config.storage.set - set(key, value, callback): the
+      callback is called without arguments when the set operation has been
+      performed. If not provided, it defaults to BakeryStorage using an in
+      memory store.
+    @param {Function} config.visitPage - the function used to visit the identity
+      provider page when required, defaulting to opening a pop up window. It
+      receives an error object.
+    @param {Object} config.visitPage.Info - an object containing relevant info
+      for the visit handling.
+    @param {String} config.visitPage.Info.WaitUrl - the url to wait on for IdM
+      discharge.
+    @param {String} config.visitPage.Info.VisitUrl - the url to visit to
+      authenticate with the IdM.
+    @param {Function} config.visitPage.jujugui - an optional value specifying a
+      method to use against idm to authenticate. Used in non interactive
+      authentication scenarios.
+    @param {Function} config.sendRequest -  a function used to make XHR HTTP
+      requests, with the following signature: func(path, method, headers, body,
+      withCredentials, callback) -> xhr. By default an internal function is
+      used. This is mostly for testing.
   */
-  constructor(params={}) {
+  constructor(params = {}) {
     this._onSuccess = params.onSuccess || (() => {});
     this._sendRequest = params.sendRequest || _request;
     this.storage = params.storage || new BakeryStorage(new InMemoryStore());
-    this._visitPage = params.visitPage || (error => {
-      window.open(error.Info.VisitURL, 'Login');
-    });
+    this._visitPage =
+      params.visitPage ||
+      ((error) => {
+        window.open(error.Info.VisitURL, "Login");
+      });
     this._dischargeDisabled = false;
   }
 
@@ -113,15 +125,20 @@ const Bakery = class Bakery {
     method = method.toLowerCase();
     // Prepare the send method and wrap the provided callback.
     const wrappedCallback = this._wrapCallback(
-      url, method, headers, body, callback);
+      url,
+      method,
+      headers,
+      body,
+      callback
+    );
     // Prepare the header. Include already stored macaroons in the header if
     // present for the current URL.
-    const allHeaders = {'Bakery-Protocol-Version': PROTOCOL_VERSION};
+    const allHeaders = { "Bakery-Protocol-Version": PROTOCOL_VERSION };
     const macaroons = this.storage.get(url);
     if (macaroons) {
-      allHeaders['Macaroons'] = macaroons;
+      allHeaders["Macaroons"] = macaroons;
     }
-    Object.keys(headers || {}).forEach(key => {
+    Object.keys(headers || {}).forEach((key) => {
       const value = headers[key];
       allHeaders[key] = value;
     });
@@ -132,12 +149,18 @@ const Bakery = class Bakery {
     // bakery.withCredentials(), which would return a bakery that sets the
     // withCredentials param to true rather than false.
     let withCredentials = false;
-    if (method === 'put' && url.indexOf('/set-auth-cookie') !== -1) {
+    if (method === "put" && url.indexOf("/set-auth-cookie") !== -1) {
       withCredentials = true;
     }
     // Send the request.
     return this._sendRequest(
-      url, method, allHeaders, body, withCredentials, wrappedCallback);
+      url,
+      method,
+      allHeaders,
+      body,
+      withCredentials,
+      wrappedCallback
+    );
   }
 
   /**
@@ -148,7 +171,7 @@ const Bakery = class Bakery {
     See the "sendRequest" method above for a description of the parameters.
   */
   get(url, headers, callback) {
-    return this.sendRequest(url, 'get', headers, null, callback);
+    return this.sendRequest(url, "get", headers, null, callback);
   }
 
   /**
@@ -159,7 +182,7 @@ const Bakery = class Bakery {
     See the "sendRequest" method above for a description of the parameters.
   */
   delete(url, headers, body, callback) {
-    return this.sendRequest(url, 'delete', headers, body, callback);
+    return this.sendRequest(url, "delete", headers, body, callback);
   }
 
   /**
@@ -170,7 +193,7 @@ const Bakery = class Bakery {
     See the "sendRequest" method above for a description of the parameters.
   */
   post(url, headers, body, callback) {
-    return this.sendRequest(url, 'post', headers, body, callback);
+    return this.sendRequest(url, "post", headers, body, callback);
   }
 
   /**
@@ -181,7 +204,7 @@ const Bakery = class Bakery {
     See the "sendRequest" method above for a description of the parameters.
   */
   put(url, headers, body, callback) {
-    return this.sendRequest(url, 'put', headers, body, callback);
+    return this.sendRequest(url, "put", headers, body, callback);
   }
 
   /**
@@ -192,7 +215,7 @@ const Bakery = class Bakery {
     See the "sendRequest" method above for a description of the parameters.
   */
   patch(url, headers, body, callback) {
-    return this.sendRequest(url, 'patch', headers, body, callback);
+    return this.sendRequest(url, "patch", headers, body, callback);
   }
 
   /**
@@ -209,8 +232,8 @@ const Bakery = class Bakery {
       macaroonlib.dischargeMacaroon(
         macaroonlib.importMacaroons(macaroon)[0],
         this._getThirdPartyDischarge.bind(this),
-        discharges => {
-          onSuccess(discharges.map(m => m._exportAsJSONObjectV1()));
+        (discharges) => {
+          onSuccess(discharges.map((m) => m._exportAsJSONObjectV1()));
         },
         onFailure
       );
@@ -229,10 +252,10 @@ const Bakery = class Bakery {
     @return {Function} A callable accepting an HTTP response.
   */
   _wrapCallback(url, method, headers, body, callback) {
-    return response => {
+    return (response) => {
       // This is the bakery exit point when everything goes well there is
       // nothing to be done further.
-      const exitSuccessfully = resp => {
+      const exitSuccessfully = (resp) => {
         callback(null, resp);
         this._onSuccess();
       };
@@ -244,12 +267,12 @@ const Bakery = class Bakery {
       }
       // At this point we must either discharge or make the user interact.
       let onSuccess;
-      const onFailure = msg => {
+      const onFailure = (msg) => {
         callback(msg, null);
       };
       switch (error.Code) {
         case ERR_INTERACTION_REQUIRED:
-          onSuccess = resp => {
+          onSuccess = (resp) => {
             // Once the interaction is done, store any resulting macaroons
             // and then exit successfully. From now on, the stored macaroons
             // will be reused and included in all requests to the same URL.
@@ -262,7 +285,7 @@ const Bakery = class Bakery {
                   // Also set this token with a fixed "identity" key so that
                   // it is easy to inject the identity token from an external
                   // system, like OpenStack Horizon/Keystone.
-                  this.storage.set('identity', token, () => {
+                  this.storage.set("identity", token, () => {
                     exitSuccessfully(resp);
                   });
                 });
@@ -277,10 +300,10 @@ const Bakery = class Bakery {
           // In the case discharge has been disabled in this bakery instance
           // (see the withoutDischarge method above) just return here.
           if (this._dischargeDisabled) {
-            callback('discharge required but disabled', response);
+            callback("discharge required but disabled", response);
             return;
           }
-          onSuccess = macaroons => {
+          onSuccess = (macaroons) => {
             // Once the discharge is acquired, store any resulting macaroons
             // and then retry the original requests again. This time the
             // resulting macaroons will be properly included in the request
@@ -313,11 +336,16 @@ const Bakery = class Bakery {
       message when the third party discharge fails.
   */
   _getThirdPartyDischarge(
-    location, thirdPartyLocation, condition, onSuccess, onFailure) {
-    const url = thirdPartyLocation + '/discharge';
-    const headers = {'Content-Type': WWW_FORM_CONTENT_TYPE};
+    location,
+    thirdPartyLocation,
+    condition,
+    onSuccess,
+    onFailure
+  ) {
+    const url = thirdPartyLocation + "/discharge";
+    const headers = { "Content-Type": WWW_FORM_CONTENT_TYPE };
     // convert condition to ascii from uint8array
-    const caveatString = new TextDecoder('utf-8').decode(condition);
+    const caveatString = new TextDecoder("utf-8").decode(condition);
     const encodedCondition = encodeURIComponent(caveatString);
     const encodedLocation = encodeURIComponent(location);
     const body = `id=${encodedCondition}&location=${encodedLocation}`;
@@ -326,13 +354,13 @@ const Bakery = class Bakery {
         onFailure(err);
         return;
       }
-      let jsonResponse = '';
+      let jsonResponse = "";
       try {
         // It's possible that the response is empty or invalid because of
         // invalid certs, or 500's, etc.
         jsonResponse = JSON.parse(response.target.responseText);
-      } catch(e) {
-        onFailure('unable to parse macaroon.');
+      } catch (e) {
+        onFailure("unable to parse macaroon.");
         return;
       }
       const macaroons = macaroonlib.importMacaroons(jsonResponse.Macaroon)[0];
@@ -358,23 +386,29 @@ const Bakery = class Bakery {
   */
   _interact(error, onSuccess, onFailure) {
     this._visitPage(error);
-    const generateRequest = callback => {
-      const headers = {'Content-Type': JSON_CONTENT_TYPE};
+    const generateRequest = (callback) => {
+      const headers = { "Content-Type": JSON_CONTENT_TYPE };
       const body = undefined;
       const withCredentials = false;
       return this._sendRequest(
-        error.Info.WaitURL, 'get', headers, body, withCredentials, callback);
+        error.Info.WaitURL,
+        "get",
+        headers,
+        body,
+        withCredentials,
+        callback
+      );
     };
     // When performing a "wait" request for the user logging into identity
     // it is possible that they take longer than the server timeout of
     // 1 minute: when this happens the server just closes the connection.
     let retryCounter = 0;
-    const retryCallback = response => {
+    const retryCallback = (response) => {
       const target = response.target;
       if (
         target.status === 0 &&
-        target.response === '' &&
-        target.responseText === ''
+        target.response === "" &&
+        target.responseText === ""
       ) {
         // Server closed the connection, retry and increment the counter.
         if (retryCounter < 5) {
@@ -387,7 +421,7 @@ const Bakery = class Bakery {
       const error = this._getError(target);
       if (error) {
         // The interaction failed.
-        onFailure('cannot interact: ' + this._getErrorMessage(error));
+        onFailure("cannot interact: " + this._getErrorMessage(error));
         return;
       }
       // The interaction succeeded.
@@ -412,15 +446,15 @@ const Bakery = class Bakery {
       return null;
     }
     // Bakery protocol errors always have JSON payloads.
-    if (target.getResponseHeader('Content-Type') !== JSON_CONTENT_TYPE) {
+    if (target.getResponseHeader("Content-Type") !== JSON_CONTENT_TYPE) {
       return null;
     }
     // At this point it should be possible to decode the error response.
     let error;
     try {
       error = JSON.parse(target.responseText);
-    } catch(err) {
-      return 'cannot parse error response';
+    } catch (err) {
+      return "cannot parse error response";
     }
     return error;
   }
@@ -439,12 +473,10 @@ const Bakery = class Bakery {
       jsonResponse.message ||
       jsonResponse.Error ||
       jsonResponse.error ||
-      'unexpected error: ' + JSON.stringify(jsonResponse)
+      "unexpected error: " + JSON.stringify(jsonResponse)
     );
   }
-
 };
-
 
 /**
   A storage for the macaroon bakery.
@@ -452,7 +484,6 @@ const Bakery = class Bakery {
   The storage is used to persist macaroons.
 */
 const BakeryStorage = class BakeryStorage {
-
   /**
     Initialize a bakery storage with the given underlaying store and params.
 
@@ -461,20 +492,21 @@ const BakeryStorage = class BakeryStorage {
       - setItem(key, value);
       - clear().
     @param {Object} config - Optional configuration.
-    @param {Object} config.initial - a map of key/value pairs that must be initially included in
-    @param {Object} config.services - a map of service names (like "charmstore" or "terms") to
-        the base URL of their corresponding API endpoints. This is used to
-        simplify and reduce the URLs passed as keys to the storage.
-    @param {Function} config.charmstoreCookieSetter - a function that can be used to register
-        macaroons to the charm store service. The function accepts a value
-        and a callback, which receives an error and a response.
+    @param {Object} config.initial - a map of key/value pairs that must be
+      initially included in
+    @param {Object} config.services - a map of service names (like "charmstore"
+      or "terms") to the base URL of their corresponding API endpoints. This is
+      used to simplify and reduce the URLs passed as keys to the storage.
+    @param {Function} config.charmstoreCookieSetter - a function that can be
+      used to register macaroons to the charm store service. The function
+      accepts a value and a callback, which receives an error and a response.
   */
-  constructor(store, params={}) {
+  constructor(store, params = {}) {
     this._store = store;
     this._services = params.services || {};
     this._charmstoreCookieSetter = params.charmstoreCookieSetter || null;
     const initial = params.initial || {};
-    Object.keys(initial).forEach(key => {
+    Object.keys(initial).forEach((key) => {
       const value = initial[key];
       if (value) {
         this.set(key, value);
@@ -506,12 +538,12 @@ const BakeryStorage = class BakeryStorage {
   set(key, value, callback) {
     key = this._getKey(key);
     this._store.setItem(key, value);
-    if (key === 'charmstore' && this._charmstoreCookieSetter) {
+    if (key === "charmstore" && this._charmstoreCookieSetter) {
       // Set the cookie so that images can be retrieved from the charm store.
       const macaroons = deserialize(value);
       this._charmstoreCookieSetter(macaroons, (err, resp) => {
         if (err) {
-          console.error('cannot set charm store cookie:', err);
+          console.error("cannot set charm store cookie:", err);
         }
         callback();
       });
@@ -553,15 +585,13 @@ const BakeryStorage = class BakeryStorage {
     }
     // If the endpoint ends with "/discharge", remove the suffix, which is
     // usally added back by bakery by convention.
-    const suffix = '/discharge';
+    const suffix = "/discharge";
     if (key.slice(-suffix.length) === suffix) {
       return key.slice(0, -suffix.length);
     }
     return key;
   }
-
 };
-
 
 /**
   An in-memory store for the BakeryStorage.
@@ -581,7 +611,6 @@ class InMemoryStore {
   }
 }
 
-
 /**
   Create, set up and send an asynchronous request to the given path/URL with
   the given method and parameters.
@@ -598,19 +627,19 @@ class InMemoryStore {
 function _request(path, method, headers, body, withCredentials, callback) {
   const xhr = new XMLHttpRequest({});
   // Set up the event handlers.
-  const handler = evt => {
+  const handler = (evt) => {
     if (callback) {
       callback(evt);
     }
     // The request has been completed: detach all the handlers.
-    xhr.removeEventListener('error', handler);
-    xhr.removeEventListener('load', handler);
+    xhr.removeEventListener("error", handler);
+    xhr.removeEventListener("load", handler);
   };
-  xhr.addEventListener('error', handler, false);
-  xhr.addEventListener('load', handler, false);
+  xhr.addEventListener("error", handler, false);
+  xhr.addEventListener("load", handler, false);
   // Set up the request.
   xhr.open(method, path, true);
-  Object.keys(headers || {}).forEach(key => {
+  Object.keys(headers || {}).forEach((key) => {
     xhr.setRequestHeader(key, headers[key]);
   });
   if (withCredentials) {
@@ -623,5 +652,5 @@ function _request(path, method, headers, body, withCredentials, callback) {
 module.exports = {
   Bakery,
   BakeryStorage,
-  InMemoryStore
+  InMemoryStore,
 };
