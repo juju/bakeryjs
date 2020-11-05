@@ -5,9 +5,8 @@ env:
 parserOptions:
   ecmaVersion: 2017
 rules:
-  arrow-parens: ["error", "as-needed"]
+  arrow-parens: 2
   brace-style: ["error", "1tbs", {allowSingleLine: true}]
-  comma-dangle: ["error", "never"]
   comma-style: 2
   comma-spacing: 2
   curly: 2
@@ -23,7 +22,7 @@ rules:
   no-undef: 2
   no-underscore-dangle: 0
   no-unused-vars: [2, {args: "none"}]
-  quotes: [2, "single"]
+  quotes: [2, "double"]
   semi: [2, "always"]
   space-before-blocks: 2
   space-before-function-paren: ["error", "never"]
