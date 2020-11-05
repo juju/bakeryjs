@@ -1,6 +1,6 @@
 {
   "name": "@canonical/macaroon-bakery",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Perform macaroon aware network requests",
   "main": "index.js",
   "scripts": {
@@ -23,9 +23,9 @@
   "devDependencies": {
     "atob": "^2.1.2",
     "btoa": "^1.2.1",
-    "eslint": "^5.16.0",
-    "rewire": "^4.0.1",
-    "sinon": "^7.3.2",
-    "tap": "^14.2.4"
+    "eslint": "^7.12.1",
+    "rewire": "^5.0.0",
+    "sinon": "^9.2.1",
+    "tap": "^14.10.8"
   }
 }
