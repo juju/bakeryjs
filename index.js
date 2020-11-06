@@ -17,7 +17,7 @@
 const macaroonlib = require("macaroon");
 
 // Define the bakery protocol version used by the GUI.
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 // Define the HTTP content type for JSON and encoded form requests.
 const JSON_CONTENT_TYPE = "application/json";
 const WWW_FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
@@ -233,7 +233,7 @@ const Bakery = class Bakery {
         macaroonlib.importMacaroons(macaroon)[0],
         this._getThirdPartyDischarge.bind(this),
         (discharges) => {
-          onSuccess(discharges.map((m) => m._exportAsJSONObjectV1()));
+          onSuccess(discharges.map((m) => m._exportAsJSONObjectV2()));
         },
         onFailure
       );
