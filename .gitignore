@@ -1,5 +1,6 @@
 .nyc_output
 node_modules/
+jsdoc2md/
 
 # junk
 *.DS_Store
