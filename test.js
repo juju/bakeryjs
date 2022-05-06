@@ -104,6 +104,17 @@ tap.test("can send requests", (t) => {
     t.end();
   });
 
+  t.test("sets the headers when the protocol version is set", (t) => {
+    const { bakeryInstance, sendRequest } = setup({ protocolVersion: 1 });
+    bakeryInstance.sendRequest("http://example.com/", "GET", { foo: "bar" });
+    const expectedHeaders = {
+      "Bakery-Protocol-Version": 1,
+      foo: "bar",
+    };
+    t.deepEqual(sendRequest.args[0][2], expectedHeaders);
+    t.end();
+  });
+
   t.test("adds macaroons to the request", (t) => {
     const { bakeryInstance, sendRequest, store } = setup();
     // We add two "macaroons" into the store--one for the url we're setting,
@@ -131,7 +142,7 @@ tap.test("can send requests", (t) => {
 tap.test("macaroon discharges", (t) => {
   t.autoend(true);
 
-  t.test("discharges macaroons", (t) => {
+  t.test("discharges v2 macaroons", (t) => {
     const macaroonString = "I macaroon";
     const macaroon = {
       _exportAsJSONObjectV2: sinon.stub().returns(macaroonString),
@@ -142,6 +153,32 @@ tap.test("macaroon discharges", (t) => {
       importMacaroons: sinon.stub().returns([macaroon]),
     });
     const { bakeryInstance } = setup();
+    const success = (discharges) => {
+      t.deepEqual(discharges, [macaroonString]);
+      stubReset();
+      t.end();
+    };
+    const failure = (msg) => {
+      console.error(msg);
+      t.fail("macaroon discharge failed");
+    };
+    bakeryInstance.discharge(macaroon, success, failure);
+    t.equal(dischargeMacaroon.callCount, 1, "macaroonlib discharge not called");
+    // Call the onOK method in macaroon.
+    dischargeMacaroon.args[0][2]([macaroon]);
+  });
+
+  t.test("discharges v1 macaroons", (t) => {
+    const macaroonString = "I macaroon";
+    const macaroon = {
+      _exportAsJSONObjectV1: sinon.stub().returns(macaroonString),
+    };
+    const dischargeMacaroon = sinon.stub();
+    const stubReset = bakery.__set__("macaroonlib", {
+      dischargeMacaroon,
+      importMacaroons: sinon.stub().returns([macaroon]),
+    });
+    const { bakeryInstance } = setup({ protocolVersion: 1 });
     const success = (discharges) => {
       t.deepEqual(discharges, [macaroonString]);
       stubReset();

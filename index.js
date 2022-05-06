@@ -16,8 +16,8 @@
 
 const macaroonlib = require("macaroon");
 
-// Define the bakery protocol version used by the GUI.
-const PROTOCOL_VERSION = 2;
+// Define the default bakery protocol version.
+const DEFAULT_PROTOCOL_VERSION = 2;
 // Define the HTTP content type for JSON and encoded form requests.
 const JSON_CONTENT_TYPE = "application/json";
 const WWW_FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
@@ -70,6 +70,8 @@ const Bakery = class Bakery {
     @param {Object} config - optional config.
     @param {Function} config.onSuccess - a function to be called when the
       request completes properly.
+    @param {Int} config.protocolVersion - the macaroon protocol version
+      that the bakery should use.
     @param {Function} config.storage - the storage used to persist macaroons.
       It must implement the following interface:
     @param {Function} config.storage.get - get(key) -> value.
@@ -104,6 +106,7 @@ const Bakery = class Bakery {
         window.open(error.Info.VisitURL, "Login");
       });
     this._dischargeDisabled = false;
+    this._protocolVersion = params.protocolVersion || DEFAULT_PROTOCOL_VERSION;
   }
 
   /**
@@ -133,7 +136,7 @@ const Bakery = class Bakery {
     );
     // Prepare the header. Include already stored macaroons in the header if
     // present for the current URL.
-    const allHeaders = { "Bakery-Protocol-Version": PROTOCOL_VERSION };
+    const allHeaders = { "Bakery-Protocol-Version": this._protocolVersion };
     const macaroons = this.storage.get(url);
     if (macaroons) {
       allHeaders["Macaroons"] = macaroons;
@@ -233,7 +236,19 @@ const Bakery = class Bakery {
         macaroonlib.importMacaroons(macaroon)[0],
         this._getThirdPartyDischarge.bind(this),
         (discharges) => {
-          onSuccess(discharges.map((m) => m._exportAsJSONObjectV2()));
+          onSuccess(
+            discharges.map((m) => {
+              if (this._protocolVersion === 1) {
+                return m._exportAsJSONObjectV1();
+              } else if (this._protocolVersion === 2) {
+                return m._exportAsJSONObjectV2();
+              } else {
+                console.error(
+                  `Supplied protocol version (${this._protocolVersion}) not supported.`
+                );
+              }
+            })
+          );
         },
         onFailure
       );

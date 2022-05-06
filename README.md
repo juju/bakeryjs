@@ -63,6 +63,7 @@ Initialize a macaroon bakery with the given parameters.
 | --- | --- | --- |
 | config | <code>Object</code> | optional config. |
 | config.onSuccess | <code>function</code> | a function to be called when the request completes         properly. |
+| config.protocolVersion | <code>number</code> | the macaroon protocol version that the bakery should use. |
 | config.storage | <code>function</code> | the storage used to persist macaroons. It must implement the         following interface: |
 | config.storage.get | <code>function</code> | get(key) -> value. |
 | config.storage.set | <code>function</code> | set(key, value, callback): the callback is called without arguments           when the set operation has been performed. If not provided, it defaults to BakeryStorage using an in memory store. |
