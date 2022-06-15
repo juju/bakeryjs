@@ -4,8 +4,9 @@
   "description": "Perform macaroon aware network requests",
   "main": "index.js",
   "scripts": {
-    "test": "tap --cov test.js",
+    "test": "tap --cov test.js --reporter classic",
     "lint": "eslint .",
+    "clean": "rm -rf node_modules",
     "docs": "jsdoc2md -t jsdoc2md/README.hbs index.js > README.md; echo"
   },
   "repository": {
