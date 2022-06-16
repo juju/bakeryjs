@@ -1,12 +1,16 @@
 {
   "name": "@canonical/macaroon-bakery",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Perform macaroon aware network requests",
-  "main": "index.js",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/bakery.js",
   "scripts": {
-    "test": "tap --cov test.js --reporter classic",
+    "build": "webpack",
+    "test": "jest",
     "lint": "eslint .",
-    "clean": "rm -rf node_modules",
+    "clean": "rm -rf node_modules dist",
     "docs": "jsdoc2md -t jsdoc2md/README.hbs index.js > README.md; echo"
   },
   "repository": {
@@ -23,12 +27,21 @@
     "macaroon": "3.0.4"
   },
   "devDependencies": {
+    "@babel/core": "7.18.5",
+    "@babel/preset-env": "7.18.2",
     "atob": "2.1.2",
+    "babel-loader": "8.2.5",
+    "babel-plugin-rewire": "1.2.0",
     "btoa": "1.2.1",
+    "buffer": "6.0.3",
+    "crypto-browserify": "3.12.0",
     "eslint": "7.12.1",
+    "jest": "28.1.1",
+    "jest-environment-jsdom": "28.1.1",
     "jsdoc-to-markdown": "6.0.1",
-    "rewire": "5.0.0",
-    "sinon": "9.2.1",
-    "tap": "14.10.8"
+    "stream-browserify": "3.0.0",
+    "util": "0.12.4",
+    "webpack": "5.73.0",
+    "webpack-cli": "4.10.0"
   }
 }
