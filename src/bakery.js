@@ -1,7 +1,5 @@
 /* Copyright (C) 2018 Canonical Ltd. */
 
-"use strict";
-
 /**
  * bakeryjs.
  * @module bakeryjs
@@ -14,7 +12,8 @@
  * ```
  */
 
-const macaroonlib = require("macaroon");
+import macaroonlib from "macaroon";
+import util from "util";
 
 // Define the default bakery protocol version.
 const DEFAULT_PROTOCOL_VERSION = 2;
@@ -29,12 +28,8 @@ const ERR_DISCHARGE_REQUIRED = "macaroon discharge required";
 const ERR_INTERACTION_REQUIRED = "interaction required";
 
 let TextDecoder;
-if (typeof window === "undefined") {
-  // No window if it's node.js.
-  const util = require("util");
+if (!TextDecoder) {
   TextDecoder = util.TextDecoder;
-} else {
-  TextDecoder = window.TextDecoder;
 }
 
 /**
@@ -63,7 +58,7 @@ const deserialize = (serialized) => {
   The bakery implements the protocol used to acquire and discharge macaroons
   over HTTP.
 */
-const Bakery = class Bakery {
+export const Bakery = class Bakery {
   /**
     Initialize a macaroon bakery with the given parameters.
 
@@ -498,7 +493,7 @@ const Bakery = class Bakery {
 
   The storage is used to persist macaroons.
 */
-const BakeryStorage = class BakeryStorage {
+export const BakeryStorage = class BakeryStorage {
   /**
     Initialize a bakery storage with the given underlaying store and params.
 
@@ -611,7 +606,7 @@ const BakeryStorage = class BakeryStorage {
 /**
   An in-memory store for the BakeryStorage.
 */
-class InMemoryStore {
+export class InMemoryStore {
   constructor() {
     this._items = {};
   }
@@ -664,8 +659,10 @@ function _request(path, method, headers, body, withCredentials, callback) {
   return xhr;
 }
 
-module.exports = {
+const lib = {
   Bakery,
   BakeryStorage,
   InMemoryStore,
 };
+
+export default lib;

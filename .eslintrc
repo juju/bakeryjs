@@ -4,6 +4,7 @@ env:
   es6: true
 parserOptions:
   ecmaVersion: 2017
+  sourceType: "module"
 rules:
   arrow-parens: 2
   brace-style: ["error", "1tbs", {allowSingleLine: true}]
@@ -29,4 +30,10 @@ rules:
   space-in-parens: 2
   strict: [2, "global"]
 globals:
-  Stripe: true
+  jest: true
+  describe: true
+  expect: true
+  fail: true
+  test: true
+  beforeEach: true
+  afterEach: true

@@ -1,8 +1,9 @@
 .nyc_output
+dist
 node_modules/
 jsdoc2md/
 
 # junk
 *.DS_Store
 *.fuse_hidden*
-
+yarn-error.log
