@@ -28,7 +28,10 @@ const ERR_DISCHARGE_REQUIRED = "macaroon discharge required";
 const ERR_INTERACTION_REQUIRED = "interaction required";
 
 let TextDecoder;
-if (!TextDecoder) {
+if (typeof window !== "undefined" && window && window.TextDecoder) {
+  TextDecoder = window.TextDecoder;
+} else {
+  // No window.TextDecoder if it's node.js.
   TextDecoder = util.TextDecoder;
 }
 
