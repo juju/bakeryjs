@@ -8,18 +8,19 @@ module.exports = {
     filename: "bakery.js",
     library: {
       name: "bakery",
-      type: "umd"
+      type: "umd",
     },
   },
   resolve: {
     fallback: {
-      "buffer": require.resolve("buffer/"),
-      "crypto": require.resolve("crypto-browserify"),
-      "stream": require.resolve("stream-browserify"),
-      "util": require.resolve("util/"),
-    }
+      buffer: require.resolve("buffer/"),
+      crypto: require.resolve("crypto-browserify"),
+      stream: require.resolve("stream-browserify"),
+      util: require.resolve("util/"),
+    },
   },
   module: {
+    noParse: [/sjcl\.js$/],
     rules: [
       {
         test: /\.m?js$/,
@@ -27,10 +28,10 @@ module.exports = {
         use: {
           loader: "babel-loader",
           options: {
-            presets: ["@babel/preset-env"]
-          }
-        }
-      }
-    ]
-  }
+            presets: ["@babel/preset-env"],
+          },
+        },
+      },
+    ],
+  },
 };
