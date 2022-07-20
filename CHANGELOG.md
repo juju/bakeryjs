@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2022-07-20
+### Updated
+- Disable crypto-browserify fallback and remove crypto warnings
+
+## [1.2.1] - 2022-07-19
+### Updated
+- Added sjcl.js to noParse to remove extra dependencies
+- Fixed an issue where node util was used instead of window.TextDecoder in browser env
+
 ## [1.2.0] - 2022-06-16
 ### Updated
 - Added Webpack and Babel to build the package.
