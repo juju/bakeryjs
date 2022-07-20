@@ -14,13 +14,12 @@ module.exports = {
   resolve: {
     fallback: {
       buffer: require.resolve("buffer/"),
-      crypto: require.resolve("crypto-browserify"),
+      crypto: false,
       stream: require.resolve("stream-browserify"),
       util: require.resolve("util/"),
     },
   },
   module: {
-    noParse: [/sjcl\.js$/],
     rules: [
       {
         test: /\.m?js$/,
