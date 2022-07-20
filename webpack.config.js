@@ -20,7 +20,6 @@ module.exports = {
     },
   },
   module: {
-    noParse: [/sjcl\.js$/],
     rules: [
       {
         test: /\.m?js$/,
