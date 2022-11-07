@@ -12,8 +12,38 @@
  * ```
  */
 
-import macaroonlib from "macaroon";
+import macaroonlib, {
+  Macaroon,
+  Error as MacaroonError,
+  MacaroonObject,
+} from "macaroon";
 import util from "util";
+
+export type BakeryRequestHeaders = Record<string, string>;
+
+export type BakeryRequestBody =
+  | Document
+  | XMLHttpRequestBodyInit
+  | null
+  | undefined;
+
+export type BakeryResponse = ProgressEvent<XMLHttpRequest>;
+
+export type BakeryRequestCallback = (
+  error: string | MacaroonError | null,
+  response: BakeryResponse | null
+) => void;
+
+export interface BakeryStore {
+  getItem(key: string): string;
+  setItem(key: string, value: string): void;
+  clear(): void;
+}
+
+export type VisitPageInfo = {
+  WaitURL: string;
+  VisitURL: string;
+};
 
 // Define the default bakery protocol version.
 const DEFAULT_PROTOCOL_VERSION = 2;
@@ -27,31 +57,31 @@ const STATUS_PROXY_AUTH_REQUIRED = 407;
 const ERR_DISCHARGE_REQUIRED = "macaroon discharge required";
 const ERR_INTERACTION_REQUIRED = "interaction required";
 
-let TextDecoder;
+let LocalTextDecoder: typeof util.TextDecoder | typeof window.TextDecoder;
 if (typeof window !== "undefined" && window && window.TextDecoder) {
-  TextDecoder = window.TextDecoder;
+  LocalTextDecoder = window.TextDecoder;
 } else {
   // No window.TextDecoder if it's node.js.
-  TextDecoder = util.TextDecoder;
+  LocalTextDecoder = util.TextDecoder;
 }
 
 /**
   Serialize the given macaroons.
 
-  @param {Array} macaroons The macaroons to be serialized.
-  @return {string} The resulting serialized string.
+  @param macaroons The macaroons to be serialized.
+  @return The resulting serialized string.
 */
-const serialize = (macaroons) => {
+const serialize = (macaroons: MacaroonObject[]) => {
   return btoa(JSON.stringify(macaroons));
 };
 
 /**
   De-serialize the given serialized macaroons.
 
-  @param {string} serialized The serialized macaroons.
-  @return {Array} The resulting macaroon slice.
+  @param serialized The serialized macaroons.
+  @return The resulting macaroon slice.
 */
-const deserialize = (serialized) => {
+const deserialize = (serialized: string): MacaroonObject => {
   return JSON.parse(atob(serialized));
 };
 
@@ -62,49 +92,69 @@ const deserialize = (serialized) => {
   over HTTP.
 */
 export const Bakery = class Bakery {
+  _dischargeDisabled: boolean;
+  _onSuccess: () => void;
+  _protocolVersion: number;
+  _sendRequest: (
+    path: string,
+    method: string,
+    headers: BakeryRequestHeaders,
+    body: BakeryRequestBody,
+    withCredentials: boolean,
+    callback: (event: BakeryResponse) => void
+  ) => XMLHttpRequest;
+  _visitPage: (error: { Info: VisitPageInfo }) => void;
+  storage: InstanceType<typeof BakeryStorage>;
+
   /**
     Initialize a macaroon bakery with the given parameters.
 
-    @param {Object} config - optional config.
-    @param {Function} config.onSuccess - a function to be called when the
+    @param config - optional config.
+    @param config.onSuccess - a function to be called when the
       request completes properly.
-    @param {Int} config.protocolVersion - the macaroon protocol version
+    @param config.protocolVersion - the macaroon protocol version
       that the bakery should use.
-    @param {Function} config.storage - the storage used to persist macaroons.
+    @param config.storage - the storage used to persist macaroons.
       It must implement the following interface:
-    @param {Function} config.storage.get - get(key) -> value.
-    @param {Function} config.storage.set - set(key, value, callback): the
+    @param config.storage.get - get(key) -> value.
+    @param config.storage.set - set(key, value, callback): the
       callback is called without arguments when the set operation has been
       performed. If not provided, it defaults to BakeryStorage using an in
       memory store.
-    @param {Function} config.visitPage - the function used to visit the identity
+    @param config.visitPage - the function used to visit the identity
       provider page when required, defaulting to opening a pop up window. It
       receives an error object.
-    @param {Object} config.visitPage.Info - an object containing relevant info
+    @param config.visitPage.Info - an object containing relevant info
       for the visit handling.
-    @param {String} config.visitPage.Info.WaitUrl - the url to wait on for IdM
+    @param config.visitPage.Info.WaitURL - the url to wait on for IdM
       discharge.
-    @param {String} config.visitPage.Info.VisitUrl - the url to visit to
+    @param config.visitPage.Info.VisitURL - the url to visit to
       authenticate with the IdM.
-    @param {Function} config.visitPage.jujugui - an optional value specifying a
+    @param config.visitPage.jujugui - an optional value specifying a
       method to use against idm to authenticate. Used in non interactive
       authentication scenarios.
-    @param {Function} config.sendRequest -  a function used to make XHR HTTP
+    @param config.sendRequest -  a function used to make XHR HTTP
       requests, with the following signature: func(path, method, headers, body,
       withCredentials, callback) -> xhr. By default an internal function is
       used. This is mostly for testing.
   */
-  constructor(params = {}) {
-    this._onSuccess = params.onSuccess || (() => {});
-    this._sendRequest = params.sendRequest || _request;
-    this.storage = params.storage || new BakeryStorage(new InMemoryStore());
+  constructor(params?: {
+    onSuccess: Bakery["_onSuccess"];
+    sendRequest: Bakery["_sendRequest"];
+    storage: Bakery["storage"];
+    visitPage: Bakery["_visitPage"];
+    protocolVersion: Bakery["_protocolVersion"];
+  }) {
+    this._onSuccess = params?.onSuccess || (() => {});
+    this._sendRequest = params?.sendRequest || _request;
+    this.storage = params?.storage || new BakeryStorage(new InMemoryStore());
     this._visitPage =
-      params.visitPage ||
+      params?.visitPage ||
       ((error) => {
         window.open(error.Info.VisitURL, "Login");
       });
     this._dischargeDisabled = false;
-    this._protocolVersion = params.protocolVersion || DEFAULT_PROTOCOL_VERSION;
+    this._protocolVersion = params?.protocolVersion || DEFAULT_PROTOCOL_VERSION;
   }
 
   /**
@@ -112,17 +162,23 @@ export const Bakery = class Bakery {
     and body. The given callback receives an error and a response when the
     request is complete.
 
-    @param {String} url The URL to which to send the request.
-    @param {String} method The HTTP method, like "get" or "POST".
-    @param {Object} headers Headers that must be included in the request.
+    @param url The URL to which to send the request.
+    @param method The HTTP method, like "get" or "POST".
+    @param headers Headers that must be included in the request.
       Note that bakery specific headers are automatically added internally.
-    @param {String} body The request body if it applies, or null.
-    @param {Function} callback A function called when the response is
+    @param body The request body if it applies, or null.
+    @param callback A function called when the response is
       received from the remote URL. It receives a tuple (error, response).
       If the request succeeds the error is null.
-    @return {Object} the XHR instance.
+    @return the XHR instance.
   */
-  sendRequest(url, method, headers, body, callback) {
+  sendRequest(
+    url: string,
+    method: string,
+    headers: BakeryRequestHeaders,
+    body: BakeryRequestBody,
+    callback: BakeryRequestCallback
+  ): XMLHttpRequest {
     method = method.toLowerCase();
     // Prepare the send method and wrap the provided callback.
     const wrappedCallback = this._wrapCallback(
@@ -134,7 +190,9 @@ export const Bakery = class Bakery {
     );
     // Prepare the header. Include already stored macaroons in the header if
     // present for the current URL.
-    const allHeaders = { "Bakery-Protocol-Version": this._protocolVersion };
+    const allHeaders: BakeryRequestHeaders = {
+      "Bakery-Protocol-Version": this._protocolVersion.toString(),
+    };
     const macaroons = this.storage.get(url);
     if (macaroons) {
       allHeaders["Macaroons"] = macaroons;
@@ -171,7 +229,11 @@ export const Bakery = class Bakery {
 
     See the "sendRequest" method above for a description of the parameters.
   */
-  get(url, headers, callback) {
+  get(
+    url: string,
+    headers: BakeryRequestHeaders,
+    callback: BakeryRequestCallback
+  ) {
     return this.sendRequest(url, "get", headers, null, callback);
   }
 
@@ -182,7 +244,12 @@ export const Bakery = class Bakery {
 
     See the "sendRequest" method above for a description of the parameters.
   */
-  delete(url, headers, body, callback) {
+  delete(
+    url: string,
+    headers: BakeryRequestHeaders,
+    body: BakeryRequestBody,
+    callback: BakeryRequestCallback
+  ) {
     return this.sendRequest(url, "delete", headers, body, callback);
   }
 
@@ -193,7 +260,12 @@ export const Bakery = class Bakery {
 
     See the "sendRequest" method above for a description of the parameters.
   */
-  post(url, headers, body, callback) {
+  post(
+    url: string,
+    headers: BakeryRequestHeaders,
+    body: BakeryRequestBody,
+    callback: BakeryRequestCallback
+  ) {
     return this.sendRequest(url, "post", headers, body, callback);
   }
 
@@ -204,7 +276,12 @@ export const Bakery = class Bakery {
 
     See the "sendRequest" method above for a description of the parameters.
   */
-  put(url, headers, body, callback) {
+  put(
+    url: string,
+    headers: BakeryRequestHeaders,
+    body: BakeryRequestBody,
+    callback: BakeryRequestCallback
+  ) {
     return this.sendRequest(url, "put", headers, body, callback);
   }
 
@@ -215,43 +292,53 @@ export const Bakery = class Bakery {
 
     See the "sendRequest" method above for a description of the parameters.
   */
-  patch(url, headers, body, callback) {
+  patch(
+    url: string,
+    headers: BakeryRequestHeaders,
+    body: BakeryRequestBody,
+    callback: BakeryRequestCallback
+  ) {
     return this.sendRequest(url, "patch", headers, body, callback);
   }
 
   /**
     Discharge the given macaroon. Acquire any third party discharges.
 
-    @param {Object} macaroon The decoded macaroon to be discharged.
-    @param {Function} onSuccess The function to be called if the
+    @param macaroon The decoded macaroon to be discharged.
+    @param onSuccess The function to be called if the
       discharge succeeds. It receives the resulting macaroons array.
-    @param {Function} onFailure The function to be called if the
+    @param onFailure The function to be called if the
       discharge fails. It receives an error message.
   */
-  discharge(macaroon, onSuccess, onFailure) {
+  discharge(
+    macaroon: string,
+    onSuccess: (macaroon: MacaroonObject[]) => void,
+    onFailure: (message: string | MacaroonError) => void
+  ) {
     try {
       macaroonlib.dischargeMacaroon(
         macaroonlib.importMacaroons(macaroon)[0],
         this._getThirdPartyDischarge.bind(this),
         (discharges) => {
           onSuccess(
-            discharges.map((m) => {
+            discharges.reduce<MacaroonObject[]>((macaroons, m) => {
               if (this._protocolVersion === 1) {
-                return m._exportAsJSONObjectV1();
+                macaroons.push(m._exportAsJSONObjectV1());
               } else if (this._protocolVersion === 2) {
-                return m._exportAsJSONObjectV2();
+                macaroons.push(m._exportAsJSONObjectV2());
               } else {
                 console.error(
                   `Supplied protocol version (${this._protocolVersion}) not supported.`
                 );
               }
-            })
+              return macaroons;
+            }, [])
           );
         },
         onFailure
       );
-    } catch (exc) {
-      onFailure(`discharge failed: ${exc.message}`);
+    } catch (exc: any) {
+      onFailure(`discharge failed: ${exc?.message ?? ""}}`);
     }
   }
 
@@ -262,34 +349,44 @@ export const Bakery = class Bakery {
     See the "sendRequest" method above for a description of the parameters.
 
     @private
-    @return {Function} A callable accepting an HTTP response.
+    @return A callable accepting an HTTP response.
   */
-  _wrapCallback(url, method, headers, body, callback) {
-    return (response) => {
+  _wrapCallback(
+    url: string,
+    method: string,
+    headers: BakeryRequestHeaders,
+    body: BakeryRequestBody,
+    callback: BakeryRequestCallback
+  ) {
+    return (response: BakeryResponse) => {
       // This is the bakery exit point when everything goes well there is
       // nothing to be done further.
-      const exitSuccessfully = (resp) => {
+      const exitSuccessfully = (resp: BakeryResponse) => {
         callback(null, resp);
         this._onSuccess();
       };
-      const error = this._getError(response.target);
+      const error = this._getError<VisitPageInfo>(response.target);
       if (!error) {
         // No discharge or interaction required.
         exitSuccessfully(response);
         return;
       }
+      if (typeof error === "string") {
+        callback(error, null);
+        return;
+      }
       // At this point we must either discharge or make the user interact.
       let onSuccess;
-      const onFailure = (msg) => {
+      const onFailure = (msg: string | MacaroonError) => {
         callback(msg, null);
       };
       switch (error.Code) {
         case ERR_INTERACTION_REQUIRED:
-          onSuccess = (resp) => {
+          onSuccess = (resp: BakeryResponse) => {
             // Once the interaction is done, store any resulting macaroons
             // and then exit successfully. From now on, the stored macaroons
             // will be reused and included in all requests to the same URL.
-            const jsonResponse = JSON.parse(resp.target.responseText);
+            const jsonResponse = JSON.parse(resp.target?.responseText ?? "");
             const macaroons = serialize(jsonResponse.Macaroon);
             this.storage.set(url, macaroons, () => {
               if (jsonResponse.DischargeToken) {
@@ -316,7 +413,7 @@ export const Bakery = class Bakery {
             callback("discharge required but disabled", response);
             return;
           }
-          onSuccess = (macaroons) => {
+          onSuccess = (macaroons: MacaroonObject[]) => {
             // Once the discharge is acquired, store any resulting macaroons
             // and then retry the original requests again. This time the
             // resulting macaroons will be properly included in the request
@@ -339,40 +436,44 @@ export const Bakery = class Bakery {
     Obtain a discharge macaroon for the given third party location.
 
     @private
-    @param {String} location The origin location.
-    @param {String} thirdPartyLocation The third party location where to
+    @param location The origin location.
+    @param thirdPartyLocation The third party location where to
       discharge.
-    @param {Uint8Array} condition The caveat to be discharged.
-    @param {Function} onSuccess A function that will be called with the
+    @param condition The caveat to be discharged.
+    @param onSuccess A function that will be called with the
       discharge macaroon when the acquisition is successfully completed.
-    @param {Function} onFailure A function that will be called with an error
+    @param onFailure A function that will be called with an error
       message when the third party discharge fails.
   */
   _getThirdPartyDischarge(
-    location,
-    thirdPartyLocation,
-    condition,
-    onSuccess,
-    onFailure
+    location: string | undefined,
+    thirdPartyLocation: string | undefined,
+    condition: Uint8Array | undefined,
+    onSuccess: (macaroon: Macaroon) => void,
+    onFailure: (message: string | MacaroonError) => void
   ) {
     const url = thirdPartyLocation + "/discharge";
     const headers = { "Content-Type": WWW_FORM_CONTENT_TYPE };
     // convert condition to ascii from uint8array
-    const caveatString = new TextDecoder("utf-8").decode(condition);
+    const caveatString = new LocalTextDecoder("utf-8").decode(condition);
     const encodedCondition = encodeURIComponent(caveatString);
-    const encodedLocation = encodeURIComponent(location);
+    const encodedLocation = location ? encodeURIComponent(location) : "";
     const body = `id=${encodedCondition}&location=${encodedLocation}`;
-    const callback = (err, response) => {
+    const callback: BakeryRequestCallback = (err, response) => {
       if (err) {
         onFailure(err);
         return;
       }
-      let jsonResponse = "";
+      let jsonResponse: { Macaroon: MacaroonObject } | null;
       try {
         // It's possible that the response is empty or invalid because of
         // invalid certs, or 500's, etc.
-        jsonResponse = JSON.parse(response.target.responseText);
+        jsonResponse = JSON.parse(response?.target?.responseText ?? "");
       } catch (e) {
+        onFailure("unable to parse macaroon.");
+        return;
+      }
+      if (!jsonResponse) {
         onFailure("unable to parse macaroon.");
         return;
       }
@@ -388,18 +489,22 @@ export const Bakery = class Bakery {
     Interact to be able to acquire authentication macaroons.
 
     @private
-    @param {String} visitURL The URL that must be visited to authenticate.
-    @param {String} waitURL The URL where to wait for the authentication to
+    @param visitURL The URL that must be visited to authenticate.
+    @param waitURL The URL where to wait for the authentication to
       be completed, and that will eventually provide the authentication
       macaroons and the discharge token.
-    @param {Function} onSuccess The function that will be called with the
+    @param onSuccess The function that will be called with the
       macaroon when the acquisition succeeds.
-    @param {Function} onFailure The function that will be called with an
+    @param onFailure The function that will be called with an
       error string when the acquisition fails.
   */
-  _interact(error, onSuccess, onFailure) {
+  _interact(
+    error: MacaroonError<VisitPageInfo>,
+    onSuccess: (response: BakeryResponse) => void,
+    onFailure: (message: string) => void
+  ) {
     this._visitPage(error);
-    const generateRequest = (callback) => {
+    const generateRequest = (callback: (response: BakeryResponse) => void) => {
       const headers = { "Content-Type": JSON_CONTENT_TYPE };
       const body = undefined;
       const withCredentials = false;
@@ -416,12 +521,12 @@ export const Bakery = class Bakery {
     // it is possible that they take longer than the server timeout of
     // 1 minute: when this happens the server just closes the connection.
     let retryCounter = 0;
-    const retryCallback = (response) => {
+    const retryCallback = (response: BakeryResponse) => {
       const target = response.target;
       if (
-        target.status === 0 &&
-        target.response === "" &&
-        target.responseText === ""
+        target?.status === 0 &&
+        target?.response === "" &&
+        target?.responseText === ""
       ) {
         // Server closed the connection, retry and increment the counter.
         if (retryCounter < 5) {
@@ -447,19 +552,21 @@ export const Bakery = class Bakery {
     Return any error present in the given response.
 
     @private
-    @param {Object} target The XHR response.target.
-    @return {Object | String} The error as found in the request.
+    @param target The XHR response.target.
+    @return The error as found in the request.
   */
-  _getError(target) {
+  _getError<I = void>(
+    target: XMLHttpRequest | null
+  ): string | MacaroonError<I> | null {
     // Check bakery statuses.
     if (
-      target.status !== STATUS_UNAUTHORIZED &&
-      target.status !== STATUS_PROXY_AUTH_REQUIRED
+      target?.status !== STATUS_UNAUTHORIZED &&
+      target?.status !== STATUS_PROXY_AUTH_REQUIRED
     ) {
       return null;
     }
     // Bakery protocol errors always have JSON payloads.
-    if (target.getResponseHeader("Content-Type") !== JSON_CONTENT_TYPE) {
+    if (target?.getResponseHeader("Content-Type") !== JSON_CONTENT_TYPE) {
       return null;
     }
     // At this point it should be possible to decode the error response.
@@ -477,15 +584,28 @@ export const Bakery = class Bakery {
     human friendly error.
 
     @private
-    @param {Object} jsonResponse The JSON decoded response text.
-    @return {String} The error message.
+    @param jsonResponse The JSON decoded response text.
+    @return The error message.
   */
-  _getErrorMessage(jsonResponse) {
+  _getErrorMessage(
+    jsonResponse:
+      | string
+      | {
+          Message?: string;
+          message?: string;
+          error?: string;
+          Error?: string;
+        }
+  ) {
+    let error = "";
+    if (typeof jsonResponse === "string") {
+      return error;
+    }
     return (
-      jsonResponse.Message ||
-      jsonResponse.message ||
-      jsonResponse.Error ||
-      jsonResponse.error ||
+      jsonResponse?.Message ||
+      jsonResponse?.message ||
+      jsonResponse?.Error ||
+      jsonResponse?.error ||
       "unexpected error: " + JSON.stringify(jsonResponse)
     );
   }
@@ -497,28 +617,40 @@ export const Bakery = class Bakery {
   The storage is used to persist macaroons.
 */
 export const BakeryStorage = class BakeryStorage {
+  _store: BakeryStore;
+  _services: Record<string, string>;
+  _charmstoreCookieSetter:
+    | ((value: MacaroonObject, callback: BakeryRequestCallback) => void)
+    | null;
   /**
     Initialize a bakery storage with the given underlaying store and params.
 
-    @param {Object} store A store object implement the following interface:
+    @param store A store object implement the following interface:
       - getItem(key) -> value;
       - setItem(key, value);
       - clear().
-    @param {Object} config - Optional configuration.
-    @param {Object} config.initial - a map of key/value pairs that must be
+    @param config - Optional configuration.
+    @param config.initial - a map of key/value pairs that must be
       initially included in
-    @param {Object} config.services - a map of service names (like "charmstore"
+    @param config.services - a map of service names (like "charmstore"
       or "terms") to the base URL of their corresponding API endpoints. This is
       used to simplify and reduce the URLs passed as keys to the storage.
-    @param {Function} config.charmstoreCookieSetter - a function that can be
+    @param config.charmstoreCookieSetter - a function that can be
       used to register macaroons to the charm store service. The function
       accepts a value and a callback, which receives an error and a response.
   */
-  constructor(store, params = {}) {
+  constructor(
+    store: BakeryStorage["_store"],
+    params?: {
+      charmstoreCookieSetter: BakeryStorage["_charmstoreCookieSetter"];
+      initial: Record<string, string>;
+      services: BakeryStorage["_services"];
+    }
+  ) {
     this._store = store;
-    this._services = params.services || {};
-    this._charmstoreCookieSetter = params.charmstoreCookieSetter || null;
-    const initial = params.initial || {};
+    this._services = params?.services || {};
+    this._charmstoreCookieSetter = params?.charmstoreCookieSetter || null;
+    const initial = params?.initial || {};
     Object.keys(initial).forEach((key) => {
       const value = initial[key];
       if (value) {
@@ -530,10 +662,10 @@ export const BakeryStorage = class BakeryStorage {
   /**
     Retrieve and return the value for the provided key.
 
-    @param {String} key The storage key, usually a URL.
-    @return {String} The corresponding value, usually a serialized macaroon.
+    @param key The storage key, usually a URL.
+    @return The corresponding value, usually a serialized macaroon.
   */
-  get(key) {
+  get(key: string) {
     key = this._getKey(key);
     return this._store.getItem(key);
   }
@@ -543,12 +675,12 @@ export const BakeryStorage = class BakeryStorage {
 
     Call the callback when done.
 
-    @param {String} key The storage key, usually a URL.
-    @param {String} value The value, usually a serialized macaroon.
-    @param {Function} callback A function called without arguments when the
+    @param key The storage key, usually a URL.
+    @param value The value, usually a serialized macaroon.
+    @param callback A function called without arguments when the
       value is properly stored.
   */
-  set(key, value, callback) {
+  set(key: string, value: string, callback?: (() => void) | null) {
     key = this._getKey(key);
     this._store.setItem(key, value);
     if (key === "charmstore" && this._charmstoreCookieSetter) {
@@ -558,11 +690,11 @@ export const BakeryStorage = class BakeryStorage {
         if (err) {
           console.error("cannot set charm store cookie:", err);
         }
-        callback();
+        callback?.();
       });
       return;
     }
-    callback();
+    callback?.();
   }
 
   /**
@@ -584,10 +716,10 @@ export const BakeryStorage = class BakeryStorage {
     its corresponding service name (and not necessarily a URL).
 
     @private
-    @param {String} key The original key.
-    @return {String} A possibly simplified/reduced key.
+    @param key The original key.
+    @return A possibly simplified/reduced key.
   */
-  _getKey(key) {
+  _getKey(key: string) {
     // If this is one of the external services known by the GUI, such as
     // the charm store or terms, flat out the key to the service name.
     for (const service in this._services) {
@@ -609,14 +741,15 @@ export const BakeryStorage = class BakeryStorage {
 /**
   An in-memory store for the BakeryStorage.
 */
-export class InMemoryStore {
+export class InMemoryStore implements BakeryStore {
+  _items: Record<string, string>;
   constructor() {
     this._items = {};
   }
-  getItem(key) {
+  getItem(key: string) {
     return this._items[key];
   }
-  setItem(key, value) {
+  setItem(key: string, value: string) {
     this._items[key] = value;
   }
   clear() {
@@ -628,21 +761,31 @@ export class InMemoryStore {
   Create, set up and send an asynchronous request to the given path/URL with
   the given method and parameters.
   @private
-  @param {String} path The remote target path/URL.
-  @param {String} method The request method (e.g. "GET" or "POST").
-  @param {Object} headers Additional request headers as key/value pairs.
-  @param {Object} body The data to send as a file object, a string or in
+  @param  path The remote target path/URL.
+  @param  method The request method (e.g. "GET" or "POST").
+  @param  headers Additional request headers as key/value pairs.
+  @param  body The data to send as a file object, a string or in
     general as an ArrayBufferView/Blob object.
-  @param {Boolean} withCredentials Whether to include credentials.
-  @param {Function} callback The load event callback.
-  @return {Object} The xhr asynchronous request instance.
+  @param  withCredentials Whether to include credentials.
+  @param  callback The load event callback.
+  @return The xhr asynchronous request instance.
 */
-function _request(path, method, headers, body, withCredentials, callback) {
-  const xhr = new XMLHttpRequest({});
+function _request(
+  path: string,
+  method: string,
+  headers: BakeryRequestHeaders,
+  body: BakeryRequestBody,
+  withCredentials: boolean,
+  callback: (event: BakeryResponse) => void
+): XMLHttpRequest {
+  const xhr = new XMLHttpRequest();
   // Set up the event handlers.
-  const handler = (evt) => {
+  const handler = (evt: ProgressEvent<XMLHttpRequestEventTarget>) => {
     if (callback) {
-      callback(evt);
+      // For some reason the full event type is lost so we must cast it back to
+      // XMLHttpRequest (which extends XMLHttpRequestEventTarget which is what
+      // the addEventListener event is typed as).
+      callback(evt as BakeryResponse);
     }
     // The request has been completed: detach all the handlers.
     xhr.removeEventListener("error", handler);
