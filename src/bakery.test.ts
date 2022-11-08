@@ -4,45 +4,95 @@ import atob from "atob";
 import btoa from "btoa";
 import { TextEncoder } from "util";
 import macaroonlib from "macaroon";
+import { newMacaroon } from "macaroon";
 
-import bakery from "../src/bakery";
+import MockProgressEvent from "xhr-mock/lib/MockProgressEvent";
+import MockXMLHttpRequest from "xhr-mock/lib/MockXMLHttpRequest";
 
-jest.mock('macaroon', () => {
-  const originalModule = jest.requireActual('macaroon');
+import {
+  Bakery,
+  BakeryStorage,
+  InMemoryStore,
+  VisitPageInfo,
+} from "../src/bakery";
+import { MacaroonObject, Error as MacaroonError } from "macaroon";
+
+const mockError: MacaroonError<VisitPageInfo> = {
+  Code: "",
+  Info: {
+    WaitURL: "",
+    VisitURL: "",
+    Macaroon: "",
+    MacaroonPath: "",
+    CookieNameSuffix: "",
+    InteractionMethods: "",
+    LegacyVisitURL: "",
+    LegacyWaitURL: "",
+  },
+  Message: "",
+};
+
+jest.mock("macaroon", () => {
+  const actual = jest.requireActual("macaroon");
   return {
     __esModule: true,
-    default: originalModule,
+    ...actual,
+    default: actual,
   };
 });
 
-function setup(params = {}, storageParams = {}) {
+type BakeryInstance = InstanceType<typeof Bakery>;
+type BakeryStorageInstance = InstanceType<typeof BakeryStorage>;
+
+function setup(
+  params: {
+    onSuccess?: BakeryInstance["_onSuccess"];
+    sendRequest?: BakeryInstance["_sendRequest"];
+    storage?: BakeryInstance["storage"];
+    visitPage?: BakeryInstance["_visitPage"];
+    protocolVersion?: BakeryInstance["_protocolVersion"];
+  } = {},
+  storageParams: {
+    charmstoreCookieSetter?: BakeryStorageInstance["_charmstoreCookieSetter"];
+    services?: BakeryStorageInstance["_services"];
+  } = {}
+) {
   const sendRequest = jest.fn();
-  const store = new bakery.InMemoryStore();
-  storageParams.services = {
-    charmstore: "http://example.com/charmstore",
-    otherService: "http://example.com/other",
+  const store = new InMemoryStore();
+  const bakeryStorage = {
+    services: {
+      charmstore: "http://example.com/charmstore",
+      otherService: "http://example.com/other",
+    },
+    ...storageParams,
   };
-  const storage = new bakery.BakeryStorage(store, storageParams);
-  params.sendRequest = sendRequest;
-  params.storage = storage;
-  const bakeryInstance = new bakery.Bakery(params);
+  const storage = new BakeryStorage(store, bakeryStorage);
+  const bakeryParams = {
+    sendRequest,
+    storage,
+    ...params,
+  };
+  const bakeryInstance = new Bakery(bakeryParams);
   return { bakeryInstance, sendRequest, storage, store };
 }
 
+let windowOpen: jest.SpyInstance;
+
 beforeEach(() => {
-  window.open = jest.fn();
+  windowOpen = jest.spyOn(window, "open");
+  windowOpen.mockImplementation(jest.fn());
 });
 
 afterEach(() => {
-  window.open.mockClear();
+  windowOpen.mockClear();
 });
 
 describe("can send requests", () => {
   test("sets the method", () => {
     const { bakeryInstance, sendRequest } = setup();
     const url = "http://example.com/";
-    const headers = { header: 42 };
-    const callback = (response) => 42;
+    const headers = { header: "42" };
+    const callback = () => 42;
     let body = "content";
     let args;
     ["PATCH", "post", "PUT"].forEach((method) => {
@@ -51,18 +101,24 @@ describe("can send requests", () => {
       args = sendRequest.mock.calls[0];
       expect(args[0]).toBe(url);
       expect(args[1]).toBe(method.toLowerCase());
-      expect(args[2]).toStrictEqual({ header: 42, "Bakery-Protocol-Version": "2" });
+      expect(args[2]).toStrictEqual({
+        header: "42",
+        "Bakery-Protocol-Version": "2",
+      });
       expect(args[3]).toBe(body);
       expect(typeof args[5]).toBe("function");
       sendRequest.mockClear();
     });
     ["GET", "delete"].forEach((method) => {
-      bakeryInstance.sendRequest(url, method, headers, callback);
+      bakeryInstance.sendRequest(url, method, headers, null, callback);
       expect(sendRequest).toHaveBeenCalledTimes(1);
       args = sendRequest.mock.calls[0];
       expect(args[0]).toBe(url);
       expect(args[1]).toBe(method.toLowerCase());
-      expect(args[2]).toStrictEqual({ header: 42, "Bakery-Protocol-Version": "2" });
+      expect(args[2]).toStrictEqual({
+        header: "42",
+        "Bakery-Protocol-Version": "2",
+      });
       expect(typeof args[5]).toBe("function");
       sendRequest.mockClear();
     });
@@ -70,9 +126,19 @@ describe("can send requests", () => {
 
   test("properly handles cookie auth", () => {
     const { bakeryInstance, sendRequest } = setup();
-    const assertWithCredentials = (method, path, expectedValue) => {
+    const assertWithCredentials = (
+      method: string,
+      path: string,
+      expectedValue: boolean
+    ) => {
       sendRequest.mockClear();
-      bakeryInstance.sendRequest("http://example.com" + path, method);
+      bakeryInstance.sendRequest(
+        "http://example.com" + path,
+        method,
+        {},
+        null,
+        jest.fn()
+      );
       expect(sendRequest.mock.calls[0][4]).toBe(expectedValue);
     };
     // When sending PUT requests to "/set-auth-cookie" endpoints, the
@@ -91,7 +157,13 @@ describe("can send requests", () => {
 
   test("sets the headers", () => {
     const { bakeryInstance, sendRequest } = setup();
-    bakeryInstance.sendRequest("http://example.com/", "GET", { foo: "bar" });
+    bakeryInstance.sendRequest(
+      "http://example.com/",
+      "GET",
+      { foo: "bar" },
+      null,
+      jest.fn()
+    );
     const expectedHeaders = {
       "Bakery-Protocol-Version": "2",
       foo: "bar",
@@ -101,7 +173,13 @@ describe("can send requests", () => {
 
   test("sets the headers when the protocol version is set", () => {
     const { bakeryInstance, sendRequest } = setup({ protocolVersion: 1 });
-    bakeryInstance.sendRequest("http://example.com/", "GET", { foo: "bar" });
+    bakeryInstance.sendRequest(
+      "http://example.com/",
+      "GET",
+      { foo: "bar" },
+      null,
+      jest.fn()
+    );
     const expectedHeaders = {
       "Bakery-Protocol-Version": "1",
       foo: "bar",
@@ -115,7 +193,13 @@ describe("can send requests", () => {
     // one that we should not get.
     store.setItem("charmstore", "doctor");
     store.setItem("identity", "bad wolf");
-    bakeryInstance.sendRequest("http://example.com/charmstore", "GET");
+    bakeryInstance.sendRequest(
+      "http://example.com/charmstore",
+      "GET",
+      {},
+      null,
+      jest.fn()
+    );
     const expectedHeaders = {
       "Bakery-Protocol-Version": "2",
       Macaroons: "doctor",
@@ -126,73 +210,108 @@ describe("can send requests", () => {
   test("wraps callbacks with discharge functionality", () => {
     const { bakeryInstance } = setup();
     const wrapper = jest.spyOn(bakeryInstance, "_wrapCallback");
-    bakeryInstance.sendRequest("http://example.com/", "GET");
+    bakeryInstance.sendRequest(
+      "http://example.com/",
+      "GET",
+      {},
+      null,
+      jest.fn()
+    );
     expect(wrapper).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("macaroon discharges", () => {
   test("discharges v2 macaroons", () => {
-    const macaroonString = "I macaroon";
-    const macaroon = {
-      _exportAsJSONObjectV2: jest.fn().mockReturnValue(macaroonString),
-    };
-    const dischargeMacaroon = jest.fn();
-    const dischargeMacaroonSpy = jest.spyOn(macaroonlib, "dischargeMacaroon").mockImplementation(dischargeMacaroon)
-    const importMacaroonsSpy = jest.spyOn(macaroonlib, "importMacaroons").mockImplementation(jest.fn().mockReturnValue([macaroon]))
+    const macaroonV2 = newMacaroon({
+      identifier: new Uint8Array(),
+      location: "",
+      rootKey: new Uint8Array(),
+      version: 2,
+    });
+    let called = false;
+    const macaroonJSON = macaroonV2.exportJSON();
+    const dischargeMacaroonSpy = jest
+      .spyOn(macaroonlib, "dischargeMacaroon")
+      .mockImplementation((a, b, c) => {
+        b("", "", new Uint8Array(), jest.fn(), jest.fn());
+        // Call the onOK method in macaroon.
+        c([macaroonV2]);
+        called = true;
+      });
+    const importMacaroonsSpy = jest
+      .spyOn(macaroonlib, "importMacaroons")
+      .mockImplementation(jest.fn().mockReturnValue([macaroonJSON]));
     const { bakeryInstance } = setup();
-    const success = (discharges) => {
-      expect(discharges).toStrictEqual([macaroonString]);
+    const success = (discharges: MacaroonObject[]) => {
+      expect(discharges).toStrictEqual([macaroonV2.exportJSON()]);
     };
-    const failure = (msg) => {
+    const failure = (msg: string | MacaroonError) => {
       console.error(msg);
       fail("macaroon discharge failed");
     };
-    bakeryInstance.discharge(macaroon, success, failure);
-    expect(dischargeMacaroon).toHaveBeenCalledTimes(1);
-    // Call the onOK method in macaroon.
-    dischargeMacaroon.mock.calls[0][2]([macaroon]);
+    bakeryInstance.discharge(macaroonJSON, success, failure);
+    expect(called).toBe(true);
     dischargeMacaroonSpy.mockRestore();
     importMacaroonsSpy.mockRestore();
   });
 
   test("discharges v1 macaroons", () => {
-    const macaroonString = "I macaroon";
-    const macaroon = {
-      _exportAsJSONObjectV1: jest.fn().mockReturnValue(macaroonString),
+    const macaroonV1 = newMacaroon({
+      identifier: new Uint8Array(),
+      location: "",
+      rootKey: new Uint8Array(),
+      version: 1,
+    });
+    let called = false;
+    const macaroonJSON = macaroonV1.exportJSON();
+    const dischargeMacaroonSpy = jest
+      .spyOn(macaroonlib, "dischargeMacaroon")
+      .mockImplementation((a, b, c) => {
+        b("", "", new Uint8Array(), jest.fn(), jest.fn());
+        // Call the onOK method in macaroon.
+        c([macaroonV1]);
+        called = true;
+      });
+    const importMacaroonsSpy = jest
+      .spyOn(macaroonlib, "importMacaroons")
+      .mockImplementation(jest.fn().mockReturnValue([macaroonJSON]));
+    const { bakeryInstance } = setup();
+    const success = (discharges: MacaroonObject[]) => {
+      expect(discharges).toStrictEqual([macaroonV1.exportJSON()]);
     };
-    const dischargeMacaroon = jest.fn();
-    const dischargeMacaroonSpy = jest.spyOn(macaroonlib, "dischargeMacaroon").mockImplementation(dischargeMacaroon)
-    const importMacaroonsSpy = jest.spyOn(macaroonlib, "importMacaroons").mockImplementation(jest.fn().mockReturnValue([macaroon]))
-    const { bakeryInstance } = setup({ protocolVersion: 1 });
-    const success = (discharges) => {
-      expect(discharges).toStrictEqual([macaroonString]);
-    };
-    const failure = (msg) => {
+    const failure = (msg: string | MacaroonError) => {
       console.error(msg);
       fail("macaroon discharge failed");
     };
-    bakeryInstance.discharge(macaroon, success, failure);
-    expect(dischargeMacaroon).toHaveBeenCalledTimes(1);
-    // Call the onOK method in macaroon.
-    dischargeMacaroon.mock.calls[0][2]([macaroon]);
+    bakeryInstance.discharge(macaroonJSON, success, failure);
+    expect(called).toBe(true);
     dischargeMacaroonSpy.mockRestore();
     importMacaroonsSpy.mockRestore();
   });
 
   test("handles failures discharging macaroons", () => {
-    const macaroon = "I macaroon";
+    const fakeMacaroon = newMacaroon({
+      identifier: new Uint8Array(),
+      location: "",
+      rootKey: new Uint8Array(),
+      version: 2,
+    }).exportJSON();
     const dischargeMacaroon = jest.fn();
-    const dischargeMacaroonSpy = jest.spyOn(macaroonlib, "dischargeMacaroon").mockImplementation(dischargeMacaroon)
-    const importMacaroonsSpy = jest.spyOn(macaroonlib, "importMacaroons").mockImplementation(jest.fn().mockReturnValue([]))
+    const dischargeMacaroonSpy = jest
+      .spyOn(macaroonlib, "dischargeMacaroon")
+      .mockImplementation(dischargeMacaroon);
+    const importMacaroonsSpy = jest
+      .spyOn(macaroonlib, "importMacaroons")
+      .mockImplementation(jest.fn().mockReturnValue([]));
     const { bakeryInstance } = setup();
-    const success = (discharges) => {
+    const success = (discharges: MacaroonObject[]) => {
       fail("this should have failed");
     };
-    const failure = (msg) => {
+    const failure = (msg: string | MacaroonError) => {
       expect(msg).toBe("broken");
     };
-    bakeryInstance.discharge(macaroon, success, failure);
+    bakeryInstance.discharge(fakeMacaroon, success, failure);
     expect(dischargeMacaroon).toHaveBeenCalledTimes(1);
     // Call the onOK method in macaroon.
     dischargeMacaroon.mock.calls[0][3]("broken");
@@ -202,12 +321,16 @@ describe("macaroon discharges", () => {
 
   test("handles third party discharge", () => {
     const dischargeMacaroon = jest.fn();
-    const dischargeMacaroonSpy = jest.spyOn(macaroonlib, "dischargeMacaroon").mockImplementation(dischargeMacaroon)
-    const importMacaroonsSpy = jest.spyOn(macaroonlib, "importMacaroons").mockImplementation(jest.fn().mockReturnValue([]))
+    const dischargeMacaroonSpy = jest
+      .spyOn(macaroonlib, "dischargeMacaroon")
+      .mockImplementation(dischargeMacaroon);
+    const importMacaroonsSpy = jest
+      .spyOn(macaroonlib, "importMacaroons")
+      .mockImplementation(jest.fn().mockReturnValue([]));
     const { bakeryInstance, sendRequest } = setup();
     const condition = new TextEncoder().encode("this is a caveat"); // uint8array
-    const success = (macaroons) => {};
-    const failure = (err) => {};
+    const success = () => {};
+    const failure = () => {};
     bakeryInstance._getThirdPartyDischarge(
       "http://example.com/",
       "http://example.com/identity",
@@ -223,8 +346,7 @@ describe("macaroon discharges", () => {
       "Bakery-Protocol-Version": "2",
       "Content-Type": "application/x-www-form-urlencoded",
     });
-    expect(
-      args[3]).toBe(
+    expect(args[3]).toBe(
       "id=this%20is%20a%20caveat&location=http%3A%2F%2Fexample.com%2F"
     );
     dischargeMacaroonSpy.mockRestore();
@@ -233,12 +355,16 @@ describe("macaroon discharges", () => {
 
   test("handles failure parsing third party maracoon data", () => {
     const dischargeMacaroon = jest.fn();
-    const dischargeMacaroonSpy = jest.spyOn(macaroonlib, "dischargeMacaroon").mockImplementation(dischargeMacaroon)
-    const importMacaroonsSpy = jest.spyOn(macaroonlib, "importMacaroons").mockImplementation(jest.fn().mockReturnValue([]))
+    const dischargeMacaroonSpy = jest
+      .spyOn(macaroonlib, "dischargeMacaroon")
+      .mockImplementation(dischargeMacaroon);
+    const importMacaroonsSpy = jest
+      .spyOn(macaroonlib, "importMacaroons")
+      .mockImplementation(jest.fn().mockReturnValue([]));
     const { bakeryInstance, sendRequest } = setup();
     const condition = new TextEncoder().encode("this is a caveat"); // uint8array
-    const success = (macaroons) => {};
-    const failure = (err) => {
+    const success = () => {};
+    const failure = (err: string | MacaroonError) => {
       expect(err).toBe("unable to parse macaroon.");
     };
     bakeryInstance._getThirdPartyDischarge(
@@ -256,8 +382,7 @@ describe("macaroon discharges", () => {
       "Bakery-Protocol-Version": "2",
       "Content-Type": "application/x-www-form-urlencoded",
     });
-    expect(
-      args[3]).toBe(
+    expect(args[3]).toBe(
       "id=this%20is%20a%20caveat&location=http%3A%2F%2Fexample.com%2F"
     );
     // When a request fails the target has no responseText so this simulates
@@ -271,16 +396,40 @@ describe("macaroon discharges", () => {
 });
 
 describe("wrapped callbacks", () => {
-
-  const getTarget = (responseObj) => {
+  const getTarget = (
+    responseObj?: Partial<MacaroonError<VisitPageInfo>>
+  ): MockXMLHttpRequest => {
+    const response = new MockXMLHttpRequest();
+    response.getResponseHeader = jest.fn().mockReturnValue("application/json");
     if (!responseObj) {
-      return { status: 200 };
+      return {
+        ...response,
+        status: 200,
+      } as MockXMLHttpRequest;
     }
     const responseText = JSON.stringify(responseObj);
     return {
+      ...response,
       status: 401,
-      getResponseHeader: jest.fn().mockReturnValue("application/json"),
-      responseText: responseText,
+      responseText,
+    } as MockXMLHttpRequest;
+  };
+
+  const createFakeEvent = (
+    responseObj?: Partial<MacaroonError<VisitPageInfo>>
+  ) => {
+    const progressEvent = new MockProgressEvent("load");
+    const target = getTarget(responseObj);
+    return {
+      ...progressEvent,
+      target: target as XMLHttpRequest,
+      composed: false,
+      composedPath: jest.fn(),
+      initEvent: jest.fn(),
+      preventDefault: jest.fn(),
+      stopImmediatePropagation: jest.fn(),
+      stopPropagation: jest.fn(),
+      NONE: 0,
     };
   };
 
@@ -294,8 +443,7 @@ describe("wrapped callbacks", () => {
       "body",
       cb
     );
-    const target = getTarget();
-    wrappedCB({ target });
+    wrappedCB(createFakeEvent());
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
@@ -310,16 +458,19 @@ describe("wrapped callbacks", () => {
       "body",
       cb
     );
-    const target = getTarget({
+    const event = {
+      ...mockError,
       Code: "interaction required",
       Info: {
+        ...mockError.Info,
         VisitURL: "http://example.com/identity",
         WaitURL: "http://example.com/identity/wait",
       },
-    });
-    wrappedCB({ target });
+    };
+    wrappedCB(createFakeEvent(event));
     expect(interact).toHaveBeenCalledTimes(1);
-    const info = interact.mock.calls[0][0].Info;
+    const info = (interact.mock.calls[0][0] as MacaroonError<VisitPageInfo>)
+      .Info;
     expect(info.VisitURL).toBe("http://example.com/identity");
     expect(info.WaitURL).toBe("http://example.com/identity/wait");
   });
@@ -327,6 +478,7 @@ describe("wrapped callbacks", () => {
   test("handles discharge if needed", () => {
     const { bakeryInstance } = setup();
     const dischargeStub = jest.spyOn(bakeryInstance, "discharge");
+    dischargeStub.mockImplementation(jest.fn());
     const cb = jest.fn();
     const wrappedCB = bakeryInstance._wrapCallback(
       "http://example.com",
@@ -335,11 +487,15 @@ describe("wrapped callbacks", () => {
       "body",
       cb
     );
-    const target = getTarget({
+    const event = {
+      ...mockError,
       Code: "macaroon discharge required",
-      Info: { Macaroon: "macaroon" },
-    });
-    wrappedCB({ target });
+      Info: {
+        ...mockError.Info,
+        Macaroon: "macaroon",
+      },
+    };
+    wrappedCB(createFakeEvent(event));
     expect(dischargeStub).toHaveBeenCalledTimes(1);
     const args = dischargeStub.mock.calls[0];
     expect(args[0]).toBe("macaroon");
@@ -347,8 +503,7 @@ describe("wrapped callbacks", () => {
 });
 
 describe("interact handling", () => {
-
-  const getResponse = (fail) => {
+  const getResponse = (fail?: boolean) => {
     let response = {
       target: {
         status: 200,
@@ -368,28 +523,31 @@ describe("interact handling", () => {
         return "visits";
       },
     });
-    expect(bakeryInstance._visitPage()).toBe("visits");
+    expect(
+      bakeryInstance._visitPage({ Info: { WaitURL: "", VisitURL: "" } })
+    ).toBe("visits");
   });
 
   test("opens the visit page", () => {
-    global.window = {
-      open: jest.fn(),
-    };
+    const openSpy = jest.spyOn(window, "open");
     const { bakeryInstance } = setup();
     const error = {
       Info: {
         VisitURL: "http://example.com",
+        WaitURL: "",
       },
     };
     bakeryInstance._visitPage(error);
-    expect(global.window.open).toHaveBeenCalledTimes(1);
-    expect(global.window.open.mock.calls[0][0]).toBe(error.Info.VisitURL);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy.mock.calls[0][0]).toBe(error.Info.VisitURL);
   });
 
   test("sets the content type correctly for the wait call", () => {
     const { bakeryInstance, sendRequest } = setup();
     const error = {
+      ...mockError,
       Info: {
+        ...mockError.Info,
         WaitURL: "http://example.com/wait",
         VisitURL: "http://example.com/visit",
       },
@@ -401,13 +559,17 @@ describe("interact handling", () => {
     );
     expect(sendRequest).toHaveBeenCalledTimes(1);
     expect(sendRequest.mock.calls[0][0]).toBe("http://example.com/wait");
-    expect(sendRequest.mock.calls[0][2]["Content-Type"]).toBe("application/json");
+    expect(sendRequest.mock.calls[0][2]["Content-Type"]).toBe(
+      "application/json"
+    );
   });
 
   test("handles retry", () => {
     const { bakeryInstance, sendRequest } = setup();
     const error = {
+      ...mockError,
       Info: {
+        ...mockError.Info,
         WaitURL: "http://example.com/wait",
         VisitURL: "http://example.com/visit",
       },
@@ -430,7 +592,9 @@ describe("interact handling", () => {
   test("limits retries", () => {
     const { bakeryInstance, sendRequest } = setup();
     const error = {
+      ...mockError,
       Info: {
+        ...mockError.Info,
         WaitURL: "http://example.com/wait",
         VisitURL: "http://example.com/visit",
       },
@@ -451,7 +615,9 @@ describe("interact handling", () => {
   test("handles errors", () => {
     const { bakeryInstance, sendRequest } = setup();
     const error = {
+      ...mockError,
       Info: {
+        ...mockError.Info,
         WaitURL: "http://example.com/wait",
         VisitURL: "http://example.com/visit",
       },
@@ -461,7 +627,9 @@ describe("interact handling", () => {
         wrappedCallback(getResponse(true));
       }
     );
-    jest.spyOn(bakeryInstance, "_getError").mockReturnValue({ message: "bad wolf" });
+    jest
+      .spyOn(bakeryInstance, "_getError")
+      .mockReturnValue({ ...mockError, Message: "bad wolf" });
     const ok = jest.fn();
     const fail = jest.fn();
     bakeryInstance._interact(error, ok, fail);
@@ -473,7 +641,9 @@ describe("interact handling", () => {
   test("handles success", () => {
     const { bakeryInstance, sendRequest } = setup();
     const error = {
+      ...mockError,
       Info: {
+        ...mockError.Info,
         WaitURL: "http://example.com/wait",
         VisitURL: "http://example.com/visit",
       },
@@ -493,7 +663,6 @@ describe("interact handling", () => {
 });
 
 describe("storage", () => {
-
   test("sets items", () => {
     const { storage, store } = setup();
     storage.set("http://example.com/charmstore", "foo", () => {});
@@ -517,18 +686,18 @@ describe("storage", () => {
   });
 
   describe("keys", () => {
-
     test("removes discharge suffix", () => {
       const { storage } = setup();
-      expect(
-        "http://example.com/identity").toBe(
+      expect("http://example.com/identity").toBe(
         storage._getKey("http://example.com/identity/discharge")
       );
     });
 
     test("gets keys from services", () => {
       const { storage } = setup();
-      expect("charmstore").toBe(storage._getKey("http://example.com/charmstore"));
+      expect("charmstore").toBe(
+        storage._getKey("http://example.com/charmstore")
+      );
     });
 
     test("does not modify other keys", () => {

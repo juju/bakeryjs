@@ -10,12 +10,14 @@ export default {
   devtool: "source-map",
   entry: "./src/bakery.ts",
   mode: "production",
+  experiments: {
+    outputModule: true,
+  },
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "bakery.js",
     library: {
-      name: "bakery",
-      type: "umd",
+      type: "module",
     },
   },
   resolve: {

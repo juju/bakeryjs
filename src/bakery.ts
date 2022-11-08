@@ -91,7 +91,7 @@ const deserialize = (serialized: string): MacaroonObject => {
   The bakery implements the protocol used to acquire and discharge macaroons
   over HTTP.
 */
-export const Bakery = class Bakery {
+class Bakery {
   _dischargeDisabled: boolean;
   _onSuccess: () => void;
   _protocolVersion: number;
@@ -101,7 +101,7 @@ export const Bakery = class Bakery {
     headers: BakeryRequestHeaders,
     body: BakeryRequestBody,
     withCredentials: boolean,
-    callback: (event: BakeryResponse) => void
+    callback?: (event: BakeryResponse) => void
   ) => XMLHttpRequest;
   _visitPage: (error: { Info: VisitPageInfo }) => void;
   storage: InstanceType<typeof BakeryStorage>;
@@ -139,11 +139,11 @@ export const Bakery = class Bakery {
       used. This is mostly for testing.
   */
   constructor(params?: {
-    onSuccess: Bakery["_onSuccess"];
-    sendRequest: Bakery["_sendRequest"];
-    storage: Bakery["storage"];
-    visitPage: Bakery["_visitPage"];
-    protocolVersion: Bakery["_protocolVersion"];
+    onSuccess?: Bakery["_onSuccess"];
+    sendRequest?: Bakery["_sendRequest"];
+    storage?: Bakery["storage"];
+    visitPage?: Bakery["_visitPage"];
+    protocolVersion?: Bakery["_protocolVersion"];
   }) {
     this._onSuccess = params?.onSuccess || (() => {});
     this._sendRequest = params?.sendRequest || _request;
@@ -311,7 +311,7 @@ export const Bakery = class Bakery {
       discharge fails. It receives an error message.
   */
   discharge(
-    macaroon: string,
+    macaroon: MacaroonObject,
     onSuccess: (macaroon: MacaroonObject[]) => void,
     onFailure: (message: string | MacaroonError) => void
   ) {
@@ -320,25 +320,12 @@ export const Bakery = class Bakery {
         macaroonlib.importMacaroons(macaroon)[0],
         this._getThirdPartyDischarge.bind(this),
         (discharges) => {
-          onSuccess(
-            discharges.reduce<MacaroonObject[]>((macaroons, m) => {
-              if (this._protocolVersion === 1) {
-                macaroons.push(m._exportAsJSONObjectV1());
-              } else if (this._protocolVersion === 2) {
-                macaroons.push(m._exportAsJSONObjectV2());
-              } else {
-                console.error(
-                  `Supplied protocol version (${this._protocolVersion}) not supported.`
-                );
-              }
-              return macaroons;
-            }, [])
-          );
+          onSuccess(discharges.map((m) => m.exportJSON()));
         },
         onFailure
       );
     } catch (exc: any) {
-      onFailure(`discharge failed: ${exc?.message ?? ""}}`);
+      onFailure(`discharge failed: ${exc?.message ?? ""}`);
     }
   }
 
@@ -609,14 +596,14 @@ export const Bakery = class Bakery {
       "unexpected error: " + JSON.stringify(jsonResponse)
     );
   }
-};
+}
 
 /**
   A storage for the macaroon bakery.
 
   The storage is used to persist macaroons.
 */
-export const BakeryStorage = class BakeryStorage {
+class BakeryStorage {
   _store: BakeryStore;
   _services: Record<string, string>;
   _charmstoreCookieSetter:
@@ -642,9 +629,9 @@ export const BakeryStorage = class BakeryStorage {
   constructor(
     store: BakeryStorage["_store"],
     params?: {
-      charmstoreCookieSetter: BakeryStorage["_charmstoreCookieSetter"];
-      initial: Record<string, string>;
-      services: BakeryStorage["_services"];
+      charmstoreCookieSetter?: BakeryStorage["_charmstoreCookieSetter"];
+      initial?: Record<string, string>;
+      services?: BakeryStorage["_services"];
     }
   ) {
     this._store = store;
@@ -736,12 +723,12 @@ export const BakeryStorage = class BakeryStorage {
     }
     return key;
   }
-};
+}
 
 /**
   An in-memory store for the BakeryStorage.
 */
-export class InMemoryStore implements BakeryStore {
+class InMemoryStore implements BakeryStore {
   _items: Record<string, string>;
   constructor() {
     this._items = {};
@@ -776,7 +763,7 @@ function _request(
   headers: BakeryRequestHeaders,
   body: BakeryRequestBody,
   withCredentials: boolean,
-  callback: (event: BakeryResponse) => void
+  callback?: (event: BakeryResponse) => void
 ): XMLHttpRequest {
   const xhr = new XMLHttpRequest();
   // Set up the event handlers.
@@ -805,10 +792,4 @@ function _request(
   return xhr;
 }
 
-const lib = {
-  Bakery,
-  BakeryStorage,
-  InMemoryStore,
-};
-
-export default lib;
+export { Bakery, BakeryStorage, InMemoryStore };
