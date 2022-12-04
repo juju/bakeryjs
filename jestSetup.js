@@ -1,4 +1,4 @@
-import { TextDecoder, TextEncoder } from "util";
+const util = require("util");
 
-window.TextDecoder = TextDecoder;
-window.TextEncoder = TextEncoder;
+window.TextDecoder = util.TextDecoder;
+window.TextEncoder = util.TextEncoder;
