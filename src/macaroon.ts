@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-namespace */
 // Types from:
 // - https://github.com/go-macaroon/js-macaroon/pull/50
 // - https://github.com/go-macaroon-bakery/macaroon-bakery/

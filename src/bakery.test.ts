@@ -1,11 +1,10 @@
+/* eslint-disable no-undef */
 /* Copyright (C) 2018 Canonical Ltd. */
 
 import atob from "atob";
 import btoa from "btoa";
+import macaroonlib, { newMacaroon } from "macaroon";
 import { TextEncoder } from "util";
-import macaroonlib from "macaroon";
-import { newMacaroon } from "macaroon";
-
 import MockProgressEvent from "xhr-mock/lib/MockProgressEvent";
 import MockXMLHttpRequest from "xhr-mock/lib/MockXMLHttpRequest";
 
@@ -15,7 +14,7 @@ import {
   InMemoryStore,
   VisitPageInfo,
 } from "../src/bakery";
-import { MacaroonObject, Error as MacaroonError } from "macaroon";
+import { Error as MacaroonError, MacaroonObject } from "./macaroon";
 
 const mockError: MacaroonError<VisitPageInfo> = {
   Code: "",
@@ -93,7 +92,7 @@ describe("can send requests", () => {
     const url = "http://example.com/";
     const headers = { header: "42" };
     const callback = () => 42;
-    let body = "content";
+    const body = "content";
     let args;
     ["PATCH", "post", "PUT"].forEach((method) => {
       bakeryInstance.sendRequest(url, method, headers, body, callback);
@@ -305,7 +304,7 @@ describe("macaroon discharges", () => {
       .spyOn(macaroonlib, "importMacaroons")
       .mockImplementation(jest.fn().mockReturnValue([]));
     const { bakeryInstance } = setup();
-    const success = (discharges: MacaroonObject[]) => {
+    const success = (_discharges: MacaroonObject[]) => {
       fail("this should have failed");
     };
     const failure = (msg: string | MacaroonError) => {
@@ -504,7 +503,7 @@ describe("wrapped callbacks", () => {
 
 describe("interact handling", () => {
   const getResponse = (fail?: boolean) => {
-    let response = {
+    const response = {
       target: {
         status: 200,
         responseText: "",
@@ -518,7 +517,7 @@ describe("interact handling", () => {
   };
 
   test("accepts a visit page method", () => {
-    let { bakeryInstance } = setup({
+    const { bakeryInstance } = setup({
       visitPage: () => {
         return "visits";
       },
@@ -678,7 +677,7 @@ describe("storage", () => {
   test("sets cookies for charmstore", () => {
     global.atob = atob;
     const cookieSet = jest.fn();
-    let { storage } = setup({}, { charmstoreCookieSetter: cookieSet });
+    const { storage } = setup({}, { charmstoreCookieSetter: cookieSet });
     const macaroonValue = btoa(JSON.stringify("macaroon"));
     storage.set("http://example.com/charmstore", macaroonValue, () => {});
     expect(cookieSet).toHaveBeenCalledTimes(1);

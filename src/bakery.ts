@@ -12,17 +12,17 @@
  * ```
  */
 
-import macaroonlib, {
-  Macaroon,
-  Error as MacaroonError,
-  MacaroonObject,
-} from "macaroon";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import macaroonlib from "macaroon";
+import { MacaroonObject, Macaroon, Error as MacaroonError } from "./macaroon";
 import util from "util";
 
 export type BakeryRequestHeaders = Record<string, string>;
 
 export type BakeryRequestBody =
   | Document
+  // eslint-disable-next-line no-undef
   | XMLHttpRequestBodyInit
   | null
   | undefined;
@@ -319,8 +319,8 @@ class Bakery {
       macaroonlib.dischargeMacaroon(
         macaroonlib.importMacaroons(macaroon)[0],
         this._getThirdPartyDischarge.bind(this),
-        (discharges) => {
-          onSuccess(discharges.map((m) => m.exportJSON()));
+        (discharges: Macaroon[]) => {
+          onSuccess(discharges.map((m) => m.exportJSON()) as MacaroonObject[]);
         },
         onFailure
       );
@@ -584,7 +584,7 @@ class Bakery {
           Error?: string;
         }
   ) {
-    let error = "";
+    const error = "";
     if (typeof jsonResponse === "string") {
       return error;
     }
@@ -673,7 +673,7 @@ class BakeryStorage {
     if (key === "charmstore" && this._charmstoreCookieSetter) {
       // Set the cookie so that images can be retrieved from the charm store.
       const macaroons = deserialize(value);
-      this._charmstoreCookieSetter(macaroons, (err, resp) => {
+      this._charmstoreCookieSetter(macaroons, (err, _resp) => {
         if (err) {
           console.error("cannot set charm store cookie:", err);
         }
