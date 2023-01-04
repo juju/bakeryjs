@@ -7,6 +7,7 @@ import macaroonlib, { newMacaroon } from "macaroon";
 import { TextEncoder } from "util";
 import MockProgressEvent from "xhr-mock/lib/MockProgressEvent";
 import MockXMLHttpRequest from "xhr-mock/lib/MockXMLHttpRequest";
+import { Error as MacaroonError, MacaroonObject } from "./macaroon";
 
 import {
   Bakery,
@@ -14,7 +15,6 @@ import {
   InMemoryStore,
   VisitPageInfo,
 } from "../src/bakery";
-import { Error as MacaroonError, MacaroonObject } from "./macaroon";
 
 const mockError: MacaroonError<VisitPageInfo> = {
   Code: "",
@@ -232,7 +232,7 @@ describe("macaroon discharges", () => {
     const macaroonJSON = macaroonV2.exportJSON();
     const dischargeMacaroonSpy = jest
       .spyOn(macaroonlib, "dischargeMacaroon")
-      .mockImplementation((a, b, c) => {
+      .mockImplementation((_a, b, c, _d) => {
         b("", "", new Uint8Array(), jest.fn(), jest.fn());
         // Call the onOK method in macaroon.
         c([macaroonV2]);
@@ -266,7 +266,7 @@ describe("macaroon discharges", () => {
     const macaroonJSON = macaroonV1.exportJSON();
     const dischargeMacaroonSpy = jest
       .spyOn(macaroonlib, "dischargeMacaroon")
-      .mockImplementation((a, b, c) => {
+      .mockImplementation((_a, b, c, _d) => {
         b("", "", new Uint8Array(), jest.fn(), jest.fn());
         // Call the onOK method in macaroon.
         c([macaroonV1]);

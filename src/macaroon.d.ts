@@ -295,6 +295,7 @@ export declare const dischargeMacaroon: (
   onOk: (macaroons: Macaroon[]) => void,
   onError: (err: Error) => void
 ) => void;
+
 export declare type Caveat = {
   identifier: Uint8Array;
   void?: Uint8Array;

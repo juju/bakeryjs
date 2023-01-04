@@ -11,9 +11,6 @@
  * bakery.get(url, headers, callback)
  * ```
  */
-
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 import macaroonlib from "macaroon";
 import { MacaroonObject, Macaroon, Error as MacaroonError } from "./macaroon";
 import util from "util";
