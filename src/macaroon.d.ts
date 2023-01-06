@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-namespace */
 // Types from:
 // - https://github.com/go-macaroon/js-macaroon/pull/50
 // - https://github.com/go-macaroon-bakery/macaroon-bakery/
@@ -294,6 +295,7 @@ export declare const dischargeMacaroon: (
   onOk: (macaroons: Macaroon[]) => void,
   onError: (err: Error) => void
 ) => void;
+
 export declare type Caveat = {
   identifier: Uint8Array;
   void?: Uint8Array;

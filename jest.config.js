@@ -3,7 +3,7 @@ export default {
   testEnvironment: "jsdom",
   testMatch: ["<rootDir>src/?(*.)+(test).[tj]s"],
   transform: {
-    "^.+\\.ts$": "ts-jest"
+    "^.+\\.ts$": "ts-jest",
   },
   preset: "ts-jest",
   setupFilesAfterEnv: ["<rootDir>/jestSetup.js"],
