@@ -1,7 +1,7 @@
-/* Copyright (C) 2018 Canonical Ltd. */
+/* Copyright (C) 2023 Canonical Ltd. */
 
 /**
- * bakeryjs.
+ * Javascript implementation of the Macaroon Bakery.
  * @module bakeryjs
  * @example
  * ```js

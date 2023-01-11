@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-/* Copyright (C) 2018 Canonical Ltd. */
+/* Copyright (C) 2023 Canonical Ltd. */
 
 import atob from "atob";
 import btoa from "btoa";
