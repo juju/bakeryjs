@@ -3,13 +3,6 @@
 /**
  * Javascript implementation of the Macaroon Bakery.
  * @module bakeryjs
- * @example
- * ```js
- * import { Bakery } from "@canonical/macaroon-bakery";
- * const bakery = new Bakery();
- *
- * bakery.get(url, headers, callback)
- * ```
  */
 import macaroonlib from "macaroon";
 import { MacaroonObject, Macaroon, Error as MacaroonError } from "./macaroon";
