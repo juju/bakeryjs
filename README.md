@@ -16,7 +16,7 @@ npm install @canonical/macaroon-bakery
 ## Usage
 
 ```js
-import { Bakery } from "./src/bakery";
+import { Bakery } from "@canonical/macaroon-bakery";
 const bakery = new Bakery();
 
 const url = "http://example.com/";
