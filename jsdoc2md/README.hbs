@@ -1,9 +1,36 @@
+# Macaroon bakery
+
 [![view on npm](https://img.shields.io/npm/v/@canonical/macaroon-bakery?logo=npm)](https://www.npmjs.org/package/@canonical/macaroon-bakery)
 [![npm module downloads](https://img.shields.io/npm/dt/@canonical/macaroon-bakery.svg)](https://www.npmjs.org/package/@canonical/macaroon-bakery)
 
-# bakeryjs
+## Summary
 
-# API Reference
+The macaroon bakery package can be used to create, manipulate and verify [macaroons](http://theory.stanford.edu/~ataly/Papers/macaroons.pdf) without having to worry about how they will be transported or stored. The package provides a set of convenient methods and abstractions that can be easily integrated into any application.
+
+## Installation
+
+```
+npm install @canonical/macaroon-bakery
+```
+
+## Usage
+
+```js
+import { Bakery } from "./src/bakery";
+const bakery = new Bakery();
+
+const url = "http://example.com/";
+const headers = { header: "42" };
+const callback = () => 42;
+
+// will set additional headers:
+// "Bakery-Protocol-Version": "2"
+// and any stored macaroon related to the website http://example.com/
+bakery.get(url, headers, callback);
+```
+
+## API Reference
+
 {{#module}}
 {{>body~}}
 {{>member-index~}}
